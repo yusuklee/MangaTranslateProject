@@ -7,6 +7,7 @@ from safetensors.torch import load_file
 from PIL import Image
 import numpy as np
 from dotenv import load_dotenv
+from pathlib import Path
 load_dotenv()
 
 PROMPT = """You are a professional manga translator.
@@ -27,10 +28,16 @@ PROMPT = """You are a professional manga translator.
   - Copy every input ID exactly once; order does not matter.
   - Never merge, split, omit, duplicate, or add segments."""
 
+from natsort import natsorted
 
+#이미지들 가져오기
+paths =natsorted(Path("images").glob("*.webp"))
+# image = Image.open("images/4-Koma_EP1.webp").convert('RGB')   단일 이미지
+import re
+HAS_TEXT = re.compile(r'[ぁ-んァ-ヶ一-龯0-9A-Za-z]')
+from manga_ocr import MangaOcr
+mocr = MangaOcr()
 
-#이미지 가져오기
-image = Image.open("images/4-Koma_EP1.webp").convert('RGB')
 
 
 
@@ -42,25 +49,25 @@ model = RFDETRSeg2XLarge(pretrain_weights=None, resolution=1152,
 model.model.model.load_state_dict(load_file(params,device="cpu"), strict=True)
 model.model.class_names=["text", "onomatopoeia","bubble","panel"]
 
-d = model.predict(image)
-print("detect comp")
+word_id=0
+page=1
+lines =[]
+
+for path in paths:
+    image = Image.open(path).convert('RGB')
+    d = model.predict(image)
 
 # 2 OCR
+    for (x1,y1,x2,y2), name in zip(d.xyxy, d.data["class_name"]):
+        if name=="text":
+            crop = image.crop((int(x1), int(y1), int(x2), int(y2)))
+            word = mocr(crop)
+            if word.strip() and HAS_TEXT.search(word):
+                lines.append({"id":word_id,"pos": (int(x1), int(y1), int(x2), int(y2)), "word":word, "page":page})
+                word_id+=1
+    page+=1
 
-import re
-HAS_TEXT = re.compile(r'[ぁ-んァ-ヶ一-龯0-9A-Za-z]')
-from manga_ocr import MangaOcr
-mocr = MangaOcr()
-word_id=0
-lines = []
-for (x1,y1,x2,y2), name in zip(d.xyxy, d.data["class_name"]):
-    if name=="text":
-        crop = image.crop((int(x1), int(y1), int(x2), int(y2)))
-        word = mocr(crop)
-        if word.strip() and HAS_TEXT.search(word):
-            lines.append({"id":word_id,"pos": (int(x1), int(y1), int(x2), int(y2)), "word":word})
-            word_id+=1
-lines.sort(key=lambda t:(t["pos"][1], -t["pos"][2]) )
+lines.sort(key=lambda t:(t["page"],t["pos"][1], -t["pos"][2]) )
 
 print("ocr comp")
 
@@ -103,49 +110,50 @@ print("translate comp")
 # 3 INPAINT
 #d.xyxy 말풍선을 감싸는 직사각형 좌상단, 우상단
 #d.mask 말풍선의 실제모양 픽셀 하나하나 True/False
-
-out = np.array(image)
-# for  name, masks in zip( d.data["class_name"], d.mask):
-#     if name=="bubble":
-#         out[masks]=255
-
-
 from PIL import ImageDraw, ImageFont
-
 FONT_PATH = "C:/Windows/Fonts/malgunbd.ttf"
-canvas = Image.fromarray(out)
-draw = ImageDraw.Draw(canvas)
+start_page=1
 
-for t in lines:
-      x1, y1, x2, y2 = t["pos"]
-      out[y1:y2, x1:x2] = 255
-      draw.rectangle([x1, y1, x2, y2], fill=(255, 255, 255))  # 흰색으로 지우고
-
-      box_w, box_h = x2 - x1, y2 - y1
-      for size in range(40, 8, -1):
-          font = ImageFont.truetype(FONT_PATH, size)
-          rows, cur = [], ""
-          for ch in t["word"]:
-              if draw.textlength(cur + ch, font=font) <= box_w or not cur:
-                  cur += ch
-              else:
-                  rows.append(cur)
-                  cur = ch
-          rows.append(cur)
-          if len(rows) * (size + 4) <= box_h:
-              break
-
-      y = y1 + (box_h - len(rows) * (size + 4)) // 2
-      for row in rows:  # 바로 글씨 그리기
-          w = draw.textlength(row, font=font)
-          draw.text((x1 + (box_w - w) // 2, y), row, font=font, fill=(0, 0, 0))
-          y += size + 4
-
-print("render comp")
+for path in paths:
+    #각각의 이미지마다 실행
+    image = Image.open(path).convert('RGB')
+    
+    canvas = image.copy()
+    draw = ImageDraw.Draw(canvas)
 
 
 
-canvas.save("results/4-Koma_EP1_translated.png")
+
+    page_lines = [t for t in lines if t["page"]==start_page]
+    for t in page_lines:
+          x1, y1, x2, y2 = t["pos"]
+          draw.rectangle([x1, y1, x2, y2], fill=(255, 255, 255))  # 흰색으로 지우고
+
+          box_w, box_h = x2 - x1, y2 - y1
+          for size in range(40, 8, -1):
+              font = ImageFont.truetype(FONT_PATH, size)
+              rows, cur = [], ""
+              for ch in t["word"]:
+                  if draw.textlength(cur + ch, font=font) <= box_w or not cur:
+                      cur += ch
+                  else:
+                      rows.append(cur)
+                      cur = ch
+              rows.append(cur)
+              if len(rows) * (size + 4) <= box_h:
+                  break
+    
+          y = y1 + (box_h - len(rows) * (size + 4)) // 2
+          for row in rows:  # 바로 글씨 그리기
+              w = draw.textlength(row, font=font)
+              draw.text((x1 + (box_w - w) // 2, y), row, font=font, fill=(0, 0, 0))
+              y += size + 4
+    canvas.save(f"results/4-Koma_EP{start_page}_translated.png")
+    start_page+=1
+
+
+
+
 
 
 
