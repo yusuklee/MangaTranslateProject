@@ -79,6 +79,12 @@ def detect_file(file):
         if name=="bubble":
             draw.rectangle((int(x1), int(y1), int(x2), int(y2)), outline=(0, 100, 255), width=10)
     page+=1
+    lines.sort(key=lambda t: (t["page"], t["pos"][1], -t["pos"][2]))
 
     return lines, image2
+
+
+def ocr_file(lines):
+    pass
+
 

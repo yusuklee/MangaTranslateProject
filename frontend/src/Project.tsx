@@ -3,13 +3,26 @@ import { Button } from "@/components/ui/button";
 import { useState } from "react";
 
 type Line = {
-  id: number;
-  pos: [number, number, number, number];
-  word: string;
-  ko: string;
+    id: number;
+    pos: [number, number, number, number];
+    word: string;
+    page: number;
+  };
+
+type Content = {
+  pos: [number, number, number, number]; //글자의 위치
+  original: string | null; //원본 글자
+  translated: string | null; //번역된 글자
 };
 
-const FAKE_LINES: Line[] = [
+type PageContents = {
+  [page_name: string]: {
+    changed: string | null; // base64 data URL 수정된 이미지가 들어가는곳
+    contents: Content[];
+  };
+};
+
+const example_word = [
   { id: 0, pos: [100, 50, 180, 200], word: "おはよう", ko: "안녕" },
   { id: 1, pos: [300, 80, 380, 240], word: "遅刻するぞ", ko: "늦겠어" },
 ];
@@ -17,30 +30,44 @@ const FAKE_LINES: Line[] = [
 export function Project({
   name,
   onBack,
-  pages,
+  pages, //프로젝트에 있는 파일
 }: {
   name: string;
   onBack: () => void;
   pages: string[];
 }) {
   const [selectedPage, setSelectedPage] = useState<string | null>(pages[0]);
-  
-  const [detectedLines, setDetectedLines] = useState<any[]>([]);
+  const [pageContents, setPageContent] = useState<PageContents>({});
+  const [lines, setLines] = useState<Line[]>([]);
 
   const handleDetect = async () => {
+    //api 보내는 부분
     const res = await fetch(selectedPage!);
     const blob = await res.blob();
-
     const form = new FormData();
     form.append("file", blob, "image.png");
-
     const r = await fetch("http://localhost:8000/detect", {
       method: "POST",
       body: form,
     });
+
+    //호출해서 받는 부분
     const { lines, detected_img } = await r.json();
-    setDetectedLines(lines);
-    setSelectedPage(detected_img);
+
+    //받은걸로 수정하는 곳
+    setLines(lines);
+
+    setPageContent({
+      ...pageContents,
+      [selectedPage!]: {
+        changed: detected_img,
+        contents: lines.map((l: Line) => ({
+          pos: l.pos,
+          original: l.word,
+          translated: null,
+        })),
+      },
+    });
   };
 
   return (
@@ -90,11 +117,16 @@ export function Project({
           <div>
             <Button size="sm" onClick={handleDetect}>
               DETECT
+              {/*detect를 누르면 수정본 사진이 하나 더생기고 이름은 원래 사진명_changed로 저장 */}
             </Button>
             <Button size="sm">OCR</Button>
+            {/** detect 하고난다음에 할테니까 changed로 저장되잇는걸 수정하는식? ㄴㄴ */}
             <Button size="sm">TRANSLATE</Button>
+            {/**ocr과 동일한 방식 */}
             <Button size="sm">RENDER</Button>
+            {/**동일 */}
             <Button size="sm">PROCESS</Button>
+            {/**위에 4개를 한방에 실행하는 식으로 할듯 */}
           </div>
         </div>
 
@@ -105,7 +137,9 @@ export function Project({
         >
           <img
             className=" object-cover max-w-full max-h-full"
-            src={selectedPage ?? undefined}
+            src={
+              pageContents[selectedPage!]?.changed ?? selectedPage ?? undefined
+            }
           ></img>
         </div>
       </Panel>
@@ -118,7 +152,7 @@ export function Project({
       >
         <h3 className="text-xs font-semibold text-gray-500">텍스트</h3>
         <div className="mt-3 grid gap-3">
-          {FAKE_LINES.map((line) => (
+          {example_word.map((line) => ( //추후 수정
             <div
               key={line.id}
               className="rounded-md border border-gray-200 p-2"
@@ -134,7 +168,7 @@ export function Project({
       </Panel>
 
       <footer className="flex h-7 shrink-0 items-center border-t border-gray-200 px-4 text-xs text-gray-400">
-        {FAKE_LINES.length}개 텍스트
+        {example_word.length}개 텍스트
       </footer>
     </Group>
   );
