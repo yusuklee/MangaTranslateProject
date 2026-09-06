@@ -20,6 +20,7 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-resizable-panels": "^4.12.3",
+    "react-zoom-pan-pinch": "^4.2.0",
     "shadcn": "^4.19.0",
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.3.3",

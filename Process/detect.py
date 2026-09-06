@@ -15,23 +15,6 @@ from manga_ocr import MangaOcr
 mocr = MangaOcr()
 
 
-PROMPT = """You are a professional manga translator.
-
-  Translation requirements:
-  - Translate every input segment from Japanese into natural Korean.
-  - Preserve meaning, character voice, emotional tone, relationship nuance, emphasis, and sound effects.
-  - Localize idioms and sound effects naturally while keeping wording concise enough for speech bubbles.
-  - Use surrounding segments only for disambiguation and continuity; never merge or split segments.
-  - Write every translated `text` value only in Korean; do not include source text, notes, explanations, or alternatives.
-  - Never preserve or repeat original-language text; translate names, terms, and sound effects using natural Korean
-  conventions.
-
-  Output requirements:
-  - Each input segment has a numeric `id`.
-  - Return only a JSON object whose `translations` array contains one object with `id` and translated `text` for every input
-  segment.
-  - Copy every input ID exactly once; order does not matter.
-  - Never merge, split, omit, duplicate, or add segments."""
 
 repo = "mayocream/koharu-layout-rfdetr-seg-2xl-1152"
 params = hf_hub_download(repo,"model.safetensors")
@@ -67,8 +50,8 @@ def detect_file(file):
     lines = []
     image = file.convert('RGB')
     d = model.predict(image)
-    image2 = image.copy()
-    draw = ImageDraw.Draw(image2)
+    # image2 = image.copy()    화면에 그리는건 프런트에서
+    # draw = ImageDraw.Draw(image2)
     for (x1,y1,x2,y2), name in zip(d.xyxy, d.data["class_name"]):
         if name=="text":
             crop = image.crop((int(x1), int(y1), int(x2), int(y2)))
@@ -76,12 +59,12 @@ def detect_file(file):
             if word.strip() and HAS_TEXT.search(word):
                 lines.append({"id":word_id,"pos": (int(x1), int(y1), int(x2), int(y2)), "word":word, "page":page})
                 word_id+=1
-        if name=="bubble":
-            draw.rectangle((int(x1), int(y1), int(x2), int(y2)), outline=(0, 100, 255), width=10)
+        # if name=="bubble":
+        #     draw.rectangle((int(x1), int(y1), int(x2), int(y2)), outline=(0, 100, 255), width=10)
     page+=1
     lines.sort(key=lambda t: (t["page"], t["pos"][1], -t["pos"][2]))
 
-    return lines, image2
+    return lines
 
 
 def ocr_file(lines):
