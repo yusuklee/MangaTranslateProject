@@ -21,6 +21,38 @@ PROMPT = """You are a professional manga translator.
   - Never merge, split, omit, duplicate, or add segments."""
 
 
+#응답 형태를 고정해서 모델이 다른 걸 붙이지 못하게 한다
+SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "translations": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {"id": {"type": "INTEGER"}, "text": {"type": "STRING"}},
+                "required": ["id", "text"],
+            },
+        }
+    },
+    "required": ["translations"],
+}
+
+
+#JSON 객체가 여러 개 붙어 와도 전부 읽어서 합친다
+def parse_translations(text):
+    dec = json.JSONDecoder()
+    out = {}
+    i = 0
+    while True:
+        while i < len(text) and text[i].isspace():
+            i += 1
+        if i >= len(text):
+            return out
+        obj, i = dec.raw_decode(text, i)
+        for r in obj.get("translations", []):
+            out[r["id"]] = r["text"]
+
+
 client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 def translate_lines(lines):
     payload = {
@@ -35,7 +67,7 @@ def translate_lines(lines):
         config=types.GenerateContentConfig(
             system_instruction=PROMPT,
             response_mime_type="application/json",
+            response_schema=SCHEMA,
         ),
     )
-    data = json.loads(resp.text)
-    return {r["id"]: r["text"] for r in data["translations"]}
+    return parse_translations(resp.text)

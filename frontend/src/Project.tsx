@@ -1,21 +1,23 @@
 import { Group, Panel, Separator } from "react-resizable-panels";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
-import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { Text } from "./components/editor/text";
+import { RenderOverlay } from "./components/editor/overlay";
 
 type Line = {
   id: number;
   pos: [number, number, number, number];
   word: string;
   page: number;
-};
+  mask?: string;
+};   //백엔드 /detect 응답 형식
 
 export type Content = {
   line_id: number;
   original: string | null; //원본 글자
   translated: string | null; //번역된 글자
   pos: [number, number, number, number];
+  mask?: string; //실제 글자 모양 (base64 PNG), 백엔드 inpaint_lama 용
 };
 
 type PageContents = {
@@ -23,13 +25,6 @@ type PageContents = {
     contents: Content[];
   };
 };
-
-//글자 수와 상자 크기로 폰트 크기 정하기
-function fitFontSize(w: number, h: number, len: number) {
-  if (!len) return 12;
-  const size = Math.sqrt((w * h) / (len * 1.4));
-  return Math.max(8, Math.min(40, Math.floor(size)));
-}
 
 export function Project({
   name,
@@ -42,16 +37,19 @@ export function Project({
 }) {
   const [selectedPage, setSelectedPage] = useState<string | null>(pages[0]);
   const [pageContents, setPageContent] = useState<PageContents>({});
-  const [lines, setLines] = useState<Line[]>([]); //line 배열을 api 가 리턴하고 그걸 여기다가 저장
   const [imgSize, setImgSize] = useState({ w: 1, h: 1 });
   const [selectedArea, setSelectedArea] = useState<string | null>(null);
-  let [mode, setMode] = useState(false);
-  const [inpaint, setInpaint] = useState(false);
+  const [mode, setMode] = useState(false);
+  const [inpainted, setInpainted] = useState<{ [page: string]: string }>({}); //페이지별로 글자를 지운 이미지
   const [render, setRender] = useState(false);
 
   //DETECT + OCR
   const handleDetect = async () => {
-    setInpaint(false);
+    setInpainted((prev) => {
+      const next = { ...prev };
+      delete next[selectedPage!];
+      return next;
+    }); //새로 DETECT 하면 이전 결과는 의미 없으니까
     setRender(false);
 
     //api 보내는 부분
@@ -67,29 +65,33 @@ export function Project({
     // 받는 부분
     const lines: Line[] = await r.json();
 
-    //받은걸로 수정하는 곳
-    setLines(lines);
+    const contents: Content[] = lines.map((l) => ({
+      line_id: l.id,
+      original: l.word,
+      translated: null,
+      pos: l.pos,
+      mask: l.mask,
+    }));
 
     setPageContent((prev) => ({
       ...prev,
-      [selectedPage!]: {
-        contents: lines.map((l) => ({
-          line_id: l.id,
-          original: l.word,
-          translated: null,
-          pos: l.pos,
-        })),
-      },
+      [selectedPage!]: { contents },
     }));
 
-    return lines;
+    return contents;
   };
 
-  const handleTranslate = async (target: Line[] = lines) => {
+  //현재 페이지의 contents 를 보낸다
+  const handleTranslate = async (target?: Content[]) => {
+    const contents = target ?? pageContents[selectedPage!]?.contents ?? [];
+    if (!contents.length) return;
+
     const r = await fetch("http://localhost:8000/translate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(target),
+      body: JSON.stringify(
+        contents.map((c) => ({ id: c.line_id, word: c.original }))
+      ),
     });
     const translations = await r.json(); // {"0": "안녕", "1": "뭐야"}
 
@@ -105,11 +107,29 @@ export function Project({
     }));
   };
 
-  //DETECT → TRANSLATE → 흰색으로 덮기 → 글자 얹기
+  //INPAINT : 원본 + 상자들을 백엔드에 보내 글자를 지운 이미지를 받는다
+  const handleInpaint = async (target?: Content[]) => {
+    const contents = target ?? pageContents[selectedPage!]?.contents ?? [];
+    if (!contents.length) return;
+
+    const blob = await (await fetch(selectedPage!)).blob();
+    const form = new FormData();
+    form.append("file", blob, "image.png");
+    form.append("contents", JSON.stringify(contents));
+
+    const r = await fetch("http://localhost:8000/inpaint", {
+      method: "POST",
+      body: form,
+    });
+    const { image } = await r.json();
+    setInpainted((prev) => ({ ...prev, [selectedPage!]: image }));
+  };
+
+  //DETECT → TRANSLATE → 글자 지우기 → 글자 얹기
   const handleProcess = async () => {
     const detected = await handleDetect();
     await handleTranslate(detected);
-    setInpaint(true);
+    await handleInpaint(detected);
     setRender(true);
   };
 
@@ -172,7 +192,7 @@ export function Project({
               <Button size="sm" onClick={() => handleTranslate()}>
                 TRANSLATE
               </Button>
-              <Button size="sm" onClick={() => setInpaint(!inpaint)}>
+              <Button size="sm" onClick={() => handleInpaint()}>
                 INPAINT
               </Button>
               <Button size="sm" onClick={() => setRender(!render)}>
@@ -189,7 +209,11 @@ export function Project({
               <div className="relative w-fit">
                 <img
                   className="object-cover"
-                  src={selectedPage ?? undefined}
+                  src={
+                    inpainted[selectedPage!] ??
+                    selectedPage ??
+                    undefined
+                  }
                   onLoad={(e) =>
                     setImgSize({
                       w: e.currentTarget.naturalWidth,
@@ -220,46 +244,11 @@ export function Project({
                     ))}
                   </svg>
                 )}
-                {(inpaint || render) && (
-                  <svg
-                    viewBox={`0 0 ${imgSize.w} ${imgSize.h}`}
-                    className="absolute inset-0 h-full w-full"
-                  >
-                    {pageContents[selectedPage!]?.contents.map((c) => {
-                      const [x1, y1, x2, y2] = c.pos;
-                      const w = x2 - x1;
-                      const h = y2 - y1;
-                      const text = c.translated ?? "";
-                      const size = fitFontSize(w, h, text.length);
-                      return (
-                        <g key={c.line_id}>
-                          {inpaint && (
-                            <rect
-                              x={x1}
-                              y={y1}
-                              width={w}
-                              height={h}
-                              fill="white"
-                            />
-                          )}
-                          {render && (
-                            <foreignObject x={x1} y={y1} width={w} height={h}>
-                              <div
-                                className="flex h-full w-full items-center justify-center text-center leading-tight break-words"
-                                style={{
-                                  fontSize: size,
-                                  fontFamily: "Malgun Gothic, sans-serif",
-                                  fontWeight: 700,
-                                }}
-                              >
-                                {text}
-                              </div>
-                            </foreignObject>
-                          )}
-                        </g>
-                      );
-                    })}
-                  </svg>
+                {render && (
+                  <RenderOverlay
+                    contents={pageContents[selectedPage!]?.contents ?? []}
+                    imgSize={imgSize}
+                  />
                 )}
               </div>
             </div>
@@ -281,7 +270,7 @@ export function Project({
       </Panel>
 
       <footer className="flex h-7 shrink-0 items-center border-t border-gray-200 px-4 text-xs text-gray-400">
-        {lines.length}개 텍스트
+        {pageContents[selectedPage!]?.contents.length ?? 0}개 텍스트
       </footer>
     </Group>
   );

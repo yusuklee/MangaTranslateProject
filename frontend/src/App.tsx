@@ -1,4 +1,4 @@
-import { useState, type FormEvent, useRef, useEffect } from "react";
+import { useState, type FormEvent, useRef } from "react";
 import { Project } from "./Project";
 import { set, get } from "idb-keyval";
 
@@ -16,7 +16,6 @@ function App() {
     setName("")
   };
 
-  const [pages, setPages] = useState<string[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const selFolder = () => {
