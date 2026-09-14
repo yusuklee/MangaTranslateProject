@@ -8,18 +8,18 @@ function App() {
   const [current, setCurrent] = useState<string | null>(null);
   const [files, setFiles] = useState<File[]>([]);
 
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const selFolder = () => {
+    fileRef.current?.click();
+  };
+
   const createProject = (event: FormEvent) => {
     event.preventDefault();
     const projectName = name.trim();
     if (!projectName) return;
     setProjects([...projects, projectName]);
     setName("")
-  };
-
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  const selFolder = () => {
-    fileRef.current?.click();
   };
 
   const handleFolder = async (e: React.ChangeEvent<HTMLInputElement>) => {

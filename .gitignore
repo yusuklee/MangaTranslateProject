@@ -2,3 +2,8 @@
 .idea
 test.py
 anime-manga-big-lama.pt
+comictextdetector.pt.onnx
+flux2-klein-8bit/
+fonts_cache.json
+__pycache__/
+*.pyc
