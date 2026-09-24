@@ -19,10 +19,16 @@ Everything (packages, models, your projects) stays inside that folder. To uninst
 > [!NOTE]
 > Works on any Windows 10/11 PC. With an NVIDIA GPU (driver 570 or newer, no CUDA toolkit needed) a page takes about a second. Without one it falls back to the CPU and is much slower.
 
+## setup
+
 ![alt text](<스크린샷 2026-09-25 005338.png>)
+---
 ![alt text](<스크린샷 2026-09-25 005357.png>)
+---
 ![alt text](<스크린샷 2026-09-25 005427.png>)
+---
 ![alt text](<설정 버튼 위치.png>)
+---
 ![alt text](<스크린샷 2026-09-25 010132.png>)
 
 
