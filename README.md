@@ -6,7 +6,7 @@
 
 ---
 
-Open a folder of manga pages, press **PROCESS ALL**, and get translated pages back. Detection, OCR and inpainting run locally on your GPU. Translation uses Gemini with your own API key.
+ Detection, OCR and inpainting run locally on your GPU. Translation uses Gemini with your own API key.
 
 ## Install
 
@@ -28,7 +28,7 @@ Open a folder of manga pages, press **PROCESS ALL**, and get translated pages ba
 | Render | Typesets the translation into the bubbles with the font you pick | – |
 | Export | Writes the finished pages to a folder | – |
 
-Every step can also be run on its own from the **PROCESS** menu, on the selected pages only. Edit any translation in the **TEXT** panel and the page re-renders. Projects are saved automatically and survive restarts.
+
 
 ## Models
 
@@ -38,7 +38,7 @@ Every step can also be run on its own from the **PROCESS** menu, on the selected
 - Inpainting: [LaMa (anime-manga-big-lama)](https://github.com/advimman/lama)
 - Translation: Gemini 3.5 / 3.6 / 3.7 / 3.8 flash and flash-lite, chosen in Settings. If a model is overloaded the app falls back to the next one.
 
-Model weights are downloaded on first start to `%LOCALAPPDATA%\MangaTranslator`. They stay there when you update or uninstall the app.
+
 
 ## Build from source
 
