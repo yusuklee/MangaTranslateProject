@@ -60,8 +60,32 @@ def main():
     #setuptools·wheel: fire·unidic-lite 처럼 소스로만 배포되는 패키지를 첫 실행 때 빌드하려면 필요하다.
     #embeddable 파이썬은 ._pth 로 경로가 고정돼 pip 의 격리 빌드 환경을 못 보므로, launch.py 는 --no-build-isolation 으로 설치한다
 
+    # 4) 첫 실행 때 받을 총 바이트 수 → requirements.total (진행 막대의 분모). 버전이 고정돼 있어 빌드 때 한 번 재면 된다
+    write_download_total(py)
+
     total = sum(os.path.getsize(os.path.join(b, f)) for b, _, fs in os.walk(OUT) for f in fs)
     print(f"done: {OUT}  ({total / 1e6:.0f} MB)")
+
+
+def write_download_total(py):
+    import json
+    import tempfile
+    report = os.path.join(tempfile.gettempdir(), "mt_pip_report.json")
+    subprocess.run([py, os.path.join(OUT, "pip.pyz"), "install", "--dry-run", "--report", report, "-r", os.path.join(OUT, "requirements.txt"),
+                    "--index-url", "https://download.pytorch.org/whl/cu128", "--extra-index-url", "https://pypi.org/simple",
+                    "--no-build-isolation", "--disable-pip-version-check", "-q"], check=True)
+    urls = [i["download_info"]["url"] for i in json.load(open(report, encoding="utf-8"))["install"]]
+    total = 0
+    for url in urls:
+        req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "pip/26.0"})   # UA 없으면 download.pytorch.org 가 403
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                total += int(r.headers.get("Content-Length") or 0)
+        except Exception as e:   # noqa: BLE001
+            print("  size unknown:", url[-60:], e)
+    with open(os.path.join(OUT, "requirements.total"), "w") as f:
+        f.write(str(total))
+    print(f"  first-run download: {len(urls)} files, {total / 1e9:.2f} GB -> requirements.total")
 
 
 if __name__ == "__main__":
