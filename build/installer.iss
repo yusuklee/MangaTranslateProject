@@ -6,7 +6,7 @@
 ; 설치 위치는 사용자 폴더(%LOCALAPPDATA%\MangaTranslator) 라 관리자 권한이 필요 없다. 프로젝트 데이터는 %LOCALAPPDATA%\MangaTranslator\projects
 
 #define AppName "Manga Translator"
-#define AppVersion "0.1.0"
+#define AppVersion "0.1.1"
 #define AppExe "python\pythonw.exe"
 #define AppArgs """{app}\launch.py"""
 

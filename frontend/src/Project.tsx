@@ -8,7 +8,7 @@ import { PageList } from "./components/editor/pagelist";
 import { RepeatButton } from "./components/editor/repeatbutton";
 import { Toasts, describeError, type Toast } from "./components/editor/toast";
 import { ensureFont, loadImage, renderPage, renderToPng, parallel } from "./components/editor/render";
-import { pickFolder, saveToFolder, pageFileName, downloadZip, type ExportFile } from "./components/editor/export";
+import { pickFolder, saveToFolder, pageFileName, downloadZip, type ExportFile, isDesktopApp, pickFolderDesktop, saveToFolderDesktop } from "./components/editor/export";
 
 import { API } from "./api";
 import type { ProjectDetail } from "./App";
@@ -393,22 +393,27 @@ const handle_inpaint=async(inpaint_model:string=inpaintModel,page=selectedPage!,
 
   //EXPORT: 왼쪽에서 선택한 페이지들(없으면 현재 페이지)을, 폴더를 고르게 한 뒤 같은 렌더러로 PNG 로 만들어 그 폴더에 쓴다
   //번호는 프로젝트 안 순서(0001_...) 그대로. 폴더 선택 미지원 브라우저면 zip 다운로드
+  //EXPORT 는 항상 전체 페이지 (선택과 무관)
   const handle_export = async () => {
-    const targets = targetPages;
+    const targets = pages;
     if (!targets.length) return;
-    const dir = await pickFolder(); //버튼 클릭 직후에 열어야 해서 맨 앞
-    if (dir === null) return; //취소
+    const desktop = isDesktopApp();
+    //폴더 선택은 버튼 클릭 직후에 열어야 해서 맨 앞. 앱은 윈도우 창(권한 물음 없음), 브라우저는 File System Access API
+    const folder = desktop ? await pickFolderDesktop() : null;
+    const dir = desktop ? undefined : await pickFolder();
+    if ((desktop && folder === null) || dir === null) return; //취소
     await ensureFont(font);
     const files: ExportFile[] = [];
     let done = 0;
     await parallel(targets, 4, async (page) => {   //4장씩 동시에 (코하루와 같음)
       const i = pages.indexOf(page);
       const file = { name: pageFileName(i, names?.[i]), blob: await renderToPng(inpaintedImgs[page] ?? page, pageContents[page] ?? [], font) };
-      if (dir) await saveToFolder(dir, file);
+      if (folder) await saveToFolderDesktop(folder, file);
+      else if (dir) await saveToFolder(dir, file);
       else files.push(file);
       setProgress(`EXPORT ${++done}/${targets.length}`);
     });
-    if (!dir) await downloadZip(name, files);
+    if (!folder && !dir) await downloadZip(name, files);
     setProgress(`Exported ${targets.length} pages`);
   };
 
@@ -507,7 +512,7 @@ const handle_inpaint=async(inpaint_model:string=inpaintModel,page=selectedPage!,
             suffix={targetPages.length > 1 ? ` (${targetPages.length})` : ""}
           />
           <Button variant="secondary" size="sm" onClick={() => run(() => handle_all())}>PROCESS ALL</Button>
-          <Button variant="outline" size="sm" onClick={() => run(handle_export)}>EXPORT{targetPages.length > 1 ? ` (${targetPages.length})` : ""}</Button>
+          <Button variant="outline" size="sm" onClick={() => run(handle_export)}>EXPORT</Button>
         </div>
       </header>
 

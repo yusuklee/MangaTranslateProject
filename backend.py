@@ -77,6 +77,20 @@ async def inpaint_flux_route(file: UploadFile, contents: str = Form(...)):
     return png_response(inpaint_flux(Image.open(io.BytesIO(await file.read())), json.loads(contents)))
 
 
+#데스크톱 앱 내보내기: 프런트가 캔버스로 그린 PNG 를 폴더 경로와 함께 보내면 그 폴더에 쓴다.
+#브라우저의 폴더 쓰기 API(showDirectoryPicker)는 "127.0.0.1 이 파일을 수정하도록 허용?" 창을 띄우므로, 앱에서는 이 길로 간다
+@app.post("/export")
+async def export_file(file: UploadFile, folder: str = Form(...), name: str = Form(...)):
+    folder = os.path.abspath(folder)
+    if not os.path.isdir(folder):
+        raise HTTPException(400, "folder not found")
+    if "/" in name or "\\" in name or ".." in name:
+        raise HTTPException(400, "bad file name")
+    with open(os.path.join(folder, name), "wb") as f:
+        f.write(await file.read())
+    return {"ok": True}
+
+
 #어떤 모델이 메모리에 올라와 있는지. detect 모델(RF-DETR·OCR)은 서버 시작 때 올라오니 응답이 오면 이미 준비된 것.
 #LaMa·FLUX 는 처음 쓸 때 올라온다. 프런트가 "모델 불러오는 중" 표시에 쓴다
 @app.get("/models")
