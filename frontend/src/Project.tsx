@@ -182,7 +182,6 @@ export function Project({
     }
   };
   //설정 창의 Gemini 모델 목록 (백엔드가 API 에서 받아옴)
-  const [geminiModels, setGeminiModels] = useState<string[]>([]);
   const [inpaintedImgs, setInpaintedImgs] = useState<{ [page: string]: string }>(() => {
     const out: Record<string, string> = {};
     for (const p of project.pages) if (project.erased[p.file]) out[`${API}${p.url}`] = `${API}${project.erased[p.file]}?t=${Date.now()}`;
@@ -264,13 +263,6 @@ export function Project({
 
   useEffect(() => {
     if (!backendUp) return;
-    fetch(`${API}/gemini_models`, { headers: keyHeader() })
-      .then(okJson)
-      .then((r: { models: string[]; default: string }) => {
-        setGeminiModels(r.models);
-        setSettings((s) => (r.models.includes(s.model) ? s : { ...s, model: r.default }));
-      })
-      .catch(() => {});
     fetch(`${API}/fonts`)
       .then((r) => r.json())
       .then(setAllFont)
@@ -605,7 +597,6 @@ const handle_inpaint=async(inpaint_model:string=inpaintModel,page=selectedPage!,
       <SettingsDialog
         open={settingsOpen}
         settings={settings}
-        models={geminiModels}
         fluxAvailable={fluxAvailable}
         fonts={fontChoices}
         font={font}

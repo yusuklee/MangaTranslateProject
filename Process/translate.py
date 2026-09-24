@@ -70,26 +70,6 @@ def get_client(api_key=None):
 JAPANESE = re.compile(r"[ぁ-んァ-ヶ一-龯]")   # 가나·한자가 번역문에 남았는지 검사용
 
 #설정 창에 보여줄 모델 목록: API 에서 받아 텍스트 모델만 남긴다 (image/tts/transcribe 등 제외). 한 번 받으면 캐시
-_models_cache = {}
-def list_models(api_key=None):
-    client = get_client(api_key)
-    if id(client) not in _models_cache:
-        skip = ("image", "tts", "transcribe", "robotics", "computer-use", "customtools", "omni", "embedding")
-        names = []
-        for m in client.models.list():
-            n = m.name.replace("models/", "")
-            acts = getattr(m, "supported_actions", None) or []
-            if not (n.startswith("gemini") and ("generateContent" in acts or not acts)) or any(k in n for k in skip):
-                continue
-            #구식 세대(3.5 미만)는 뺀다. 버전 없는 별칭(gemini-flash-latest 등)은 최신을 가리키니 둔다
-            ver = re.match(r"gemini-(\d+(?:\.\d+)?)", n)
-            if ver and float(ver.group(1)) < 3.5:
-                continue
-            names.append(n)
-        _models_cache[id(client)] = sorted(names, reverse=True)
-    return _models_cache[id(client)]
-
-
 MODEL = os.environ.get("TRANSLATE_MODEL", "gemini-3.6-flash")          # 바로 번역, 검토 없음
 THINKING = None                                                         # None = 모델 기본 생각 수준(보통). "minimal" 은 빨랐지만 번역이 거칠고, 지원 안 하는 모델도 있다
 FALLBACK_MODELS = ["gemini-3.5-flash", "gemini-3.5-flash-lite"]        # 503(과부하)·429(일일 한도)면 순서대로 대체

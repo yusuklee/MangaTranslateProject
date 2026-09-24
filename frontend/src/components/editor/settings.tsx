@@ -75,10 +75,11 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
+const GEMINI_MODELS = ["gemini-3.5-flash", "gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.8-flash", "gemini-3.5-flash-lite"];
+
 export const SettingsDialog = memo(function SettingsDialog({
   open,
   settings,
-  models,
   fluxAvailable = true,
   fonts,
   font,
@@ -88,7 +89,6 @@ export const SettingsDialog = memo(function SettingsDialog({
 }: {
   open: boolean;
   settings: AppSettings;
-  models: string[]; //백엔드(/gemini_models)가 준 목록
   fluxAvailable?: boolean; //false 면 FLUX 를 목록에서 뺀다 (앱 빌드)
   fonts: FontChoice[]; //렌더 글꼴 선택지
   font: FontChoice;
@@ -191,7 +191,7 @@ export const SettingsDialog = memo(function SettingsDialog({
                 </Section>
                 <Section title="Translation model">
                   <select className={`${selectCls} w-64`} value={settings.model} onChange={(e) => set({ model: e.target.value })}>
-                    {(models.length ? models : [settings.model]).map((m) => <option key={m} value={m}>{m}</option>)}
+                    {GEMINI_MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
                   </select>
                   <p className="mb-1 mt-3 text-[11px] font-medium text-muted-foreground">API key</p>
                   <div className="flex items-center gap-1">

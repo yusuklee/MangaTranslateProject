@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image
 import io, os, json
 from Process.detect import detect_file
-from Process.translate import translate_lines, list_models, MODEL as DEFAULT_MODEL
+from Process.translate import translate_lines
 from Process.inpaint_normal import inpaint_white
 from Process.inpaint_lama import inpaint_lama
 from Process.fonts import list_korean_fonts, FONTS_DIR
@@ -39,17 +39,6 @@ def translate(body: dict, x_gemini_key: str | None = Header(default=None)):
     except ValueError as e:
         raise HTTPException(400, str(e))
     except genai_errors.APIError as e:   # 키가 틀리거나(400/403) 한도(429) 등 Gemini 쪽 오류 → 그 코드와 메시지를 그대로
-        raise HTTPException(e.code if 400 <= (e.code or 0) < 600 else 502, f"Gemini: {e.message}")
-
-
-#설정 창의 모델 목록 + 기본값. 키가 틀리면 Gemini 오류 코드를 그대로 돌려준다
-@app.get("/gemini_models")
-def gemini_models(x_gemini_key: str | None = Header(default=None)):
-    try:
-        return {"models": list_models(x_gemini_key), "default": DEFAULT_MODEL}
-    except ValueError as e:
-        raise HTTPException(400, str(e))
-    except genai_errors.APIError as e:
         raise HTTPException(e.code if 400 <= (e.code or 0) < 600 else 502, f"Gemini: {e.message}")
 
 

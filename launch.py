@@ -18,6 +18,7 @@ import fnmatch
 import hashlib
 import os
 import re
+import shutil
 import socket
 import subprocess
 import sys
@@ -33,6 +34,7 @@ REQUIREMENTS_TOTAL = os.path.join(ROOT, "requirements.total")   # build/make_por
 DATA = os.environ.get("MANGA_DATA_DIR") or ROOT
 PYLIB = os.path.join(DATA, "pylib")
 MARK = os.path.join(PYLIB, ".installed")
+TMP = os.path.join(DATA, "tmp")
 TORCH_INDEX = "https://download.pytorch.org/whl/cu128"
 EXTRA_NO_DEPS = "simple-lama-inpainting==0.1.2"   # numpy<2 선언 때문에 의존성 검사 없이 설치 (requirements.txt 참고)
 HF_MODELS = [
@@ -187,15 +189,19 @@ class Boot:
         progress = PipProgress(download_total())
         self.set(phase="download", text="Downloading packages", pct=0, done=0)
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace", creationflags=flags)
+        shutil.rmtree(TMP, ignore_errors=True)
+        os.makedirs(TMP)
+        env = dict(os.environ, TMPDIR=TMP, TEMP=TMP, TMP=TMP)
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace", creationflags=flags, env=env)
         tail = []
         installing = threading.Event()
 
-        def watch_install():   # pip 은 압축 해제 진행률을 안 주므로 pylib 폴더 크기로 잰다 (torch 만 5GB 라 3~4분 걸린다)
+        def watch_install():   # pip --target 은 TMP\pip-target-* 에 먼저 풀고 끝에 pylib 로 옮긴다 → 둘을 합쳐 잰다
             while not installing.wait(2):
                 pass
             while p.poll() is None:
-                self.set(phase="install", text="Installing packages", pct=min(99, int(100 * dir_size(PYLIB) / INSTALL_SIZE)), done=1)
+                size = dir_size(PYLIB) + sum(dir_size(os.path.join(TMP, d)) for d in os.listdir(TMP) if d.startswith("pip-target-"))
+                self.set(phase="install", text="Installing packages", pct=min(99, int(100 * size / INSTALL_SIZE)), done=1)
                 time.sleep(2)
 
         threading.Thread(target=watch_install, daemon=True).start()
@@ -216,9 +222,10 @@ class Boot:
         #simple-lama-inpainting 은 numpy<2 를 요구해 위 목록과 충돌한다 (numpy 2.x 로 잘 돈다) → 의존성 검사 없이 따로
         r = subprocess.run([PYTHON, PIP, "install", "--target", PYLIB, "--no-deps", "--upgrade", EXTRA_NO_DEPS,
                             "--no-warn-script-location", "--disable-pip-version-check", "--no-cache-dir", "-q"],
-                           capture_output=True, text=True, encoding="utf-8", errors="replace", creationflags=flags)
+                           capture_output=True, text=True, encoding="utf-8", errors="replace", creationflags=flags, env=env)
         if r.returncode != 0:
             raise RuntimeError("Package install failed: " + (r.stdout + r.stderr)[-500:])
+        shutil.rmtree(TMP, ignore_errors=True)
         with open(MARK, "w", encoding="utf-8") as f:
             f.write(req_hash())
 
