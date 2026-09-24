@@ -1,13 +1,7 @@
 <h1 align="center">Manga Translator</h1>
 
-<p align="center">Desktop manga translator for Windows. Detect, OCR, translate, erase, render, export.</p>
-
 <p align="center">
 <a href="https://github.com/yusuklee/MangaTranslateProject/releases/latest"><img alt="Download" src="https://img.shields.io/github/v/release/yusuklee/MangaTranslateProject?style=for-the-badge&label=Download&color=f2760a"></a>
-</p>
-
-<p align="center">
-<a href="#install">Install</a> · <a href="#how-it-works">How it works</a> · <a href="#models">Models</a> · <a href="#build-from-source">Build from source</a>
 </p>
 
 ---
