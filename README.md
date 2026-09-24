@@ -51,7 +51,7 @@ python app.py                       # run the desktop app
 python -m uvicorn backend:app        # or just the API server for development (frontend: npm run dev)
 ```
 
-Installer: `python build/make_portable.py` then compile `build/installer.iss` with Inno Setup 6. Details in [build/README.md](build/README.md).
+Installer: `python build/make_portable.py` then compile `build/installer.iss` with Inno Setup 6.
 
 ## Thanks
 
