@@ -164,7 +164,7 @@ def create_from_folder(body: dict):
         raise HTTPException(400, "folder not found")
     files = sorted((f for f in os.listdir(folder) if f.lower().endswith(IMAGE_EXT)), key=natural_key)
     if not files:
-        raise HTTPException(400, "no images in folder")
+        raise HTTPException(400, "no image_samples in folder")
     name = (body.get("name") or "").strip() or os.path.basename(folder)
     return _create(name, [(f, os.path.join(folder, f)) for f in files])
 
@@ -177,7 +177,7 @@ async def create_from_upload(request: Request):
     files = [f for f in form.getlist("files") if isinstance(f, UploadFile)]
     files = [f for f in files if (f.filename or "").lower().endswith(IMAGE_EXT)]
     if not files:
-        raise HTTPException(400, "no images")
+        raise HTTPException(400, "no image_samples")
     files.sort(key=lambda f: natural_key(f.filename or ""))
     if not name:
         first = files[0].filename or ""

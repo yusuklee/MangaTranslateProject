@@ -34,7 +34,7 @@ def ctd_maps(image):
     canvas[:rh, :rw] = np.array(image.convert("RGB").resize((rw, rh)))
     inp = canvas.transpose(2, 0, 1)[None].astype(np.float32) / 255.0
 
-    _, seg, det = get_ctd().run(None, {"images": inp})
+    _, seg, det = get_ctd().run(None, {"image_samples": inp})
     up = lambda m: cv2.resize(m[:rh, :rw], (W, H), interpolation=cv2.INTER_LINEAR)
     return up(seg[0, 0]), up(det[0, 0])
 
