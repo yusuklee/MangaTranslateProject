@@ -36,11 +36,13 @@
 - OCR: [manga-ocr](https://huggingface.co/kha-white/manga-ocr-base)
 - Text mask: [comic-text-detector](https://github.com/dmMaze/comic-text-detector)
 - Inpainting: [LaMa (anime-manga-big-lama)](https://github.com/advimman/lama)
-- Translation: Gemini 3.5 / 3.6 / 3.7 / 3.8 flash and flash-lite, chosen in Settings. If a model is overloaded the app falls back to the next one.
+- Translation: Gemini 3.5 / 3.6 / 3.7 / 3.8 flash and 3.5 flash-lite,
+- Gemini 3.5 Flash, 3.6 Flash and 3.5 Flash-Lite are the most reliable choices right now.
+- Newer preview models (3.7, 3.8) are often overloaded and fall back to 3.5 Flash automatically.
 
 
 
-## Build from source
+## requirements
 
 Python 3.13 and Node.js.
 
@@ -51,8 +53,8 @@ python app.py                       # run the desktop app
 python -m uvicorn backend:app        # or just the API server for development (frontend: npm run dev)
 ```
 
-Installer: `python build/make_portable.py` then compile `build/installer.iss` with Inno Setup 6.
 
-## Thanks
+## Acknowledgements
 
-Built on the models above and inspired by [Koharu](https://github.com/mayocream/koharu) and [BallonsTranslator](https://github.com/dmMaze/BallonsTranslator).
+  - Text mask and layout approach: Koharu
+  - Detection / OCR / inpainting models: linked above
