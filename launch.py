@@ -39,6 +39,7 @@ HF_MODELS = [
     ("kha-white/manga-ocr-base", ["*.json", "*.txt", "*.safetensors"]),
 ]
 FALLBACK_TOTAL = 3_400_000_000   # requirements.total 이 없을 때의 대략치
+INSTALL_SIZE = 5_400_000_000     # 설치가 끝났을 때 pylib 크기 (압축 해제 진행률의 분모. 2026-09 측정값)
 
 
 def setup_env():
@@ -71,6 +72,17 @@ def download_total():
         return int(open(REQUIREMENTS_TOTAL).read().strip()) or FALLBACK_TOTAL
     except (OSError, ValueError):
         return FALLBACK_TOTAL
+
+
+def dir_size(path):
+    total = 0
+    for base, _, files in os.walk(path):
+        for f in files:
+            try:
+                total += os.path.getsize(os.path.join(base, f))
+            except OSError:
+                pass
+    return total
 
 
 def free_port():
@@ -175,6 +187,16 @@ class Boot:
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace", creationflags=flags)
         tail = []
+        installing = threading.Event()
+
+        def watch_install():   # pip 은 압축 해제 진행률을 안 주므로 pylib 폴더 크기로 잰다 (torch 만 5GB 라 3~4분 걸린다)
+            while not installing.wait(2):
+                pass
+            while p.poll() is None:
+                self.set(phase="install", text="Installing packages", pct=min(99, int(100 * dir_size(PYLIB) / INSTALL_SIZE)))
+                time.sleep(2)
+
+        threading.Thread(target=watch_install, daemon=True).start()
         for line in p.stdout:
             line = line.strip()
             if not line:
@@ -184,8 +206,8 @@ class Boot:
                 print("[pip]", line, flush=True)
             progress.feed(line)
             if line.startswith("Installing collected"):
-                self.set(phase="install", text="Installing packages", pct=None)
-            elif self.status().get("phase") == "download":
+                installing.set()
+            elif not installing.is_set():
                 self.set(phase="download", text="Downloading packages", pct=progress.pct)
         if p.wait() != 0:
             raise RuntimeError("Package install failed: " + "\n".join(tail[-5:]))

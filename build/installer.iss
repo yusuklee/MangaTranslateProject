@@ -48,6 +48,11 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Parameters: {#App
 [Run]
 Filename: "{app}\{#AppExe}"; Parameters: {#AppArgs}; WorkingDir: "{app}"; Description: "{cm:LaunchProgram,{#StringChange(AppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
+[UninstallRun]
+; 제거를 시작할 때 켜져 있는 앱(launch.py 를 돌리는 pythonw)과 첫 실행 설치 중인 pip 을 먼저 끈다.
+; 안 끄면 사용 중인 파일을 못 지워 "일부 요소는 수동으로 제거" 가 뜬다
+Filename: "powershell.exe"; Parameters: "-NoProfile -WindowStyle Hidden -Command ""Get-CimInstance Win32_Process | Where-Object {{ $_.CommandLine -like '*MangaTranslator*' -and ($_.Name -eq 'pythonw.exe' -or $_.Name -eq 'python.exe') }} | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force }}; Start-Sleep -Seconds 2"""; Flags: runhidden waituntilterminated; RunOnceId: "CloseApp"
+
 [UninstallDelete]
 ; 앱 폴더와 첫 실행 때 받은 것 전부(%LOCALAPPDATA%\MangaTranslator: pylib·hf·logs·projects)를 묻지 않고 지운다
 Type: filesandordirs; Name: "{app}"
