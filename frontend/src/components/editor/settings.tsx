@@ -12,7 +12,7 @@ type Lang = string; //Gemini 에 그대로 넘기는 영어 언어명
 //onomatopoeia: 의성어(효과음) 상자도 글자로 잡아 번역할지. RF-DETR 가 text 와 onomatopoeia 를 같이 뽑으니 포함 여부만 고른다
 export type AppSettings = { source: Lang; target: Lang; inpaintModel: InpaintModel; model: string; calls: "auto" | number; apiKey: string; onomatopoeia: boolean };
 export const DEFAULT_SETTINGS: AppSettings = { source: "Japanese", target: "Korean", inpaintModel: "inpaint_lama", model: "gemini-3.6-flash", calls: "auto", apiKey: "", onomatopoeia: false };
-export const PAGES_PER_CALL = 30;
+export const PAGES_PER_CALL = 20;
 const CALL_PRESETS = ["auto", 1, 2, 5] as const;
 
 //설정은 브라우저 localStorage 에 남긴다 (앱을 껐다 켜도 유지). API 키는 따로 저장

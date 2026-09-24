@@ -169,7 +169,7 @@ class Boot:
         cmd = [PYTHON, PIP, "install", "--target", PYLIB, "--upgrade", "-r", REQUIREMENTS,
                "--index-url", TORCH_INDEX, "--extra-index-url", "https://pypi.org/simple",
                "--no-warn-script-location", "--progress-bar", "raw", "--disable-pip-version-check",
-               "--no-build-isolation"]   # embeddable 파이썬은 격리 빌드 환경을 못 본다 → 동봉한 setuptools(pylib_boot) 로 빌드
+               "--no-build-isolation", "--no-cache-dir"]   # 캐시를 두면 4GB 가 pip 캐시 폴더에 또 남는다   # embeddable 파이썬은 격리 빌드 환경을 못 본다 → 동봉한 setuptools(pylib_boot) 로 빌드
         progress = PipProgress(download_total())
         self.set(phase="download", text="Downloading packages", pct=0)
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -191,7 +191,7 @@ class Boot:
             raise RuntimeError("Package install failed: " + "\n".join(tail[-5:]))
         #simple-lama-inpainting 은 numpy<2 를 요구해 위 목록과 충돌한다 (numpy 2.x 로 잘 돈다) → 의존성 검사 없이 따로
         r = subprocess.run([PYTHON, PIP, "install", "--target", PYLIB, "--no-deps", "--upgrade", EXTRA_NO_DEPS,
-                            "--no-warn-script-location", "--disable-pip-version-check", "-q"],
+                            "--no-warn-script-location", "--disable-pip-version-check", "--no-cache-dir", "-q"],
                            capture_output=True, text=True, encoding="utf-8", errors="replace", creationflags=flags)
         if r.returncode != 0:
             raise RuntimeError("Package install failed: " + (r.stdout + r.stderr)[-500:])

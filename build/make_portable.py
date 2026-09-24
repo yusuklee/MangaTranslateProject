@@ -55,8 +55,11 @@ def main():
 
     # 3) 진행 창용 pywebview 만 미리 설치
     py = os.path.join(OUT, "python", "python.exe")
-    subprocess.run([py, os.path.join(OUT, "pip.pyz"), "install", "--target", os.path.join(OUT, "pylib_boot"),
-                    "pywebview==6.2.1", "setuptools", "wheel", "--no-warn-script-location", "--disable-pip-version-check", "-q"], check=True)
+    boot = os.path.join(OUT, "pylib_boot")
+    common = ["--target", boot, "--no-warn-script-location", "--disable-pip-version-check", "--no-cache-dir", "-q"]
+    subprocess.run([py, os.path.join(OUT, "pip.pyz"), "install", "setuptools", "wheel", *common], check=True)
+    #pywebview 의 의존성(proxy_tools)은 소스로만 배포돼 빌드가 필요하다 → 방금 넣은 setuptools 로 (격리 빌드 환경은 embeddable 이 못 본다)
+    subprocess.run([py, os.path.join(OUT, "pip.pyz"), "install", "pywebview==6.2.1", "--no-build-isolation", *common], check=True)
     #setuptools·wheel: fire·unidic-lite 처럼 소스로만 배포되는 패키지를 첫 실행 때 빌드하려면 필요하다.
     #embeddable 파이썬은 ._pth 로 경로가 고정돼 pip 의 격리 빌드 환경을 못 보므로, launch.py 는 --no-build-isolation 으로 설치한다
 

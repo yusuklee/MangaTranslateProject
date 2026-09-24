@@ -49,5 +49,6 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Parameters: {#App
 Filename: "{app}\{#AppExe}"; Parameters: {#AppArgs}; WorkingDir: "{app}"; Description: "{cm:LaunchProgram,{#StringChange(AppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
-; 앱 폴더만 지운다. 프로젝트·설치된 패키지·모델(%LOCALAPPDATA%\MangaTranslator\{projects,pylib,hf})은 남긴다
+; 앱 폴더와 첫 실행 때 받은 것 전부(%LOCALAPPDATA%\MangaTranslator: pylib·hf·logs·projects)를 묻지 않고 지운다
 Type: filesandordirs; Name: "{app}"
+Type: filesandordirs; Name: "{localappdata}\MangaTranslator"
