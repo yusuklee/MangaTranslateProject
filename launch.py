@@ -1,12 +1,12 @@
 """포터블 앱 실행기 (BallonsTranslator 방식). zip 에는 파이썬(embeddable)·앱 코드·글꼴·작은 모델만 들어 있고,
 무거운 패키지(torch 등 약 3GB)와 모델 가중치는 처음 실행할 때 받는다. 전부 앱 폴더 안에 두므로 폴더를 지우면 깨끗이 사라진다.
 
-    <앱 폴더>\\MangaTranslator.bat  →  python\\pythonw.exe launch.py
+    MangaTranslator\\MangaTranslator.bat  →  app\\python\\pythonw.exe app\\launch.py
 
-  <앱 폴더>\\pylib\\      requirements.txt 의 패키지 (pip --target)
-  <앱 폴더>\\hf\\         Hugging Face 모델 캐시 (RF-DETR, manga-ocr)
-  <앱 폴더>\\projects\\   사용자 프로젝트
-  <앱 폴더>\\logs\\       app.log (pythonw 는 콘솔이 없으므로 출력을 여기로)
+  app\\pylib\\      requirements.txt 의 패키지 (pip --target)
+  app\\hf\\         Hugging Face 모델 캐시 (RF-DETR, manga-ocr)
+  app\\projects\\   사용자 프로젝트
+  app\\logs\\       app.log (pythonw 는 콘솔이 없으므로 출력을 여기로)
 
 흐름: 창을 먼저 띄우고 → (없으면) pip 설치 → (없으면) 모델 다운로드 → 서버 시작 → 창을 앱으로 넘김.
 로딩 화면에는 진행 막대와 퍼센트만 보여 준다 (pip 의 "Collecting ..." 같은 줄은 로그 파일로만).
@@ -162,7 +162,7 @@ class Boot:
             import importlib
             importlib.invalidate_caches()
             self.download_models()
-            self.set(phase="load", text="Loading models")
+            self.set(phase="load", text="Loading models", done=3)
             threading.Thread(target=self.serve, daemon=True).start()
             while True:
                 try:
@@ -185,7 +185,7 @@ class Boot:
                "--no-warn-script-location", "--progress-bar", "raw", "--disable-pip-version-check",
                "--no-build-isolation", "--no-cache-dir"]   # 캐시를 두면 4GB 가 pip 캐시 폴더에 또 남는다   # embeddable 파이썬은 격리 빌드 환경을 못 본다 → 동봉한 setuptools(pylib_boot) 로 빌드
         progress = PipProgress(download_total())
-        self.set(phase="download", text="Downloading packages", pct=0)
+        self.set(phase="download", text="Downloading packages", pct=0, done=0)
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace", creationflags=flags)
         tail = []
@@ -195,7 +195,7 @@ class Boot:
             while not installing.wait(2):
                 pass
             while p.poll() is None:
-                self.set(phase="install", text="Installing packages", pct=min(99, int(100 * dir_size(PYLIB) / INSTALL_SIZE)))
+                self.set(phase="install", text="Installing packages", pct=min(99, int(100 * dir_size(PYLIB) / INSTALL_SIZE)), done=1)
                 time.sleep(2)
 
         threading.Thread(target=watch_install, daemon=True).start()
@@ -210,7 +210,7 @@ class Boot:
             if line.startswith("Installing collected"):
                 installing.set()
             elif not installing.is_set():
-                self.set(phase="download", text="Downloading packages", pct=progress.pct)
+                self.set(phase="download", text="Downloading packages", pct=progress.pct, done=0)
         if p.wait() != 0:
             raise RuntimeError("Package install failed: " + "\n".join(tail[-5:]))
         #simple-lama-inpainting 은 numpy<2 를 요구해 위 목록과 충돌한다 (numpy 2.x 로 잘 돈다) → 의존성 검사 없이 따로
@@ -242,10 +242,10 @@ class Boot:
             def update(self, n=1):
                 if getattr(self, "unit", "") == "B" and n:
                     got["n"] += n
-                    boot.set(phase="download", text="Downloading models", pct=min(99, int(100 * got["n"] / total)) if total else None)
+                    boot.set(phase="download", text="Downloading models", pct=min(99, int(100 * got["n"] / total)) if total else None, done=2)
                 return super().update(n)
 
-        self.set(phase="download", text="Downloading models", pct=0 if total else None)
+        self.set(phase="download", text="Downloading models", pct=0 if total else None, done=2)
         for repo, patterns in HF_MODELS:
             snapshot_download(repo, allow_patterns=patterns, tqdm_class=Progress)
 
@@ -281,7 +281,7 @@ def loading_html():
     try { s = await window.pywebview.api.status(); } catch { return setTimeout(tick, 500); }
     const err = s.phase === "error";
     const pct = (s.pct === null || s.pct === undefined) ? null : s.pct;
-    $("title").textContent = err ? "Setup failed" : (s.text || "Starting") + (pct !== null ? `  ${pct}%` : "");
+    $("title").textContent = err ? "Setup failed" : (s.done === undefined ? "" : `${s.done}/3  `) + (s.text || "Starting") + (pct !== null ? `  ${pct}%` : "");
     $("bar").style.display = err ? "none" : "";
     $("bar").classList.toggle("busy", pct === null);
     $("fill").style.width = pct === null ? "" : pct + "%";

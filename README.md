@@ -10,8 +10,8 @@
 
 ## Install
 
-1. [Download MangaTranslator.zip](https://github.com/yusuklee/MangaTranslateProject/releases/latest/download/MangaTranslator.zip) and extract it anywhere (a short path like `C:\MangaTranslator` is best).
-2. Run **MangaTranslator.bat**. The first start downloads PyTorch and the models (about 4 GB, one time) into the same folder and shows the progress. Later starts open right away.
+1. [Download MangaTranslator.zip](https://github.com/yusuklee/MangaTranslateProject/releases/latest/download/MangaTranslator.zip) and extract it anywhere (a short path like `C:\MangaTranslator` is best). Do not run it from inside the zip.
+2. Run **MangaTranslator.bat** in the extracted folder. The first start downloads PyTorch and the models (about 4 GB, one time) into the `app` folder and shows the progress. Later starts open right away.
 3. Open **Settings** and paste your [Gemini API key](https://aistudio.google.com/apikey).
 
 Everything (packages, models, your projects) stays inside that folder. To uninstall, delete the folder.
