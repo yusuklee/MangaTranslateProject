@@ -13,6 +13,8 @@ PROMPT = """You are a professional manga translator.
   - Write every translated `text` value only in {target}; do not include source text, notes, explanations, or alternatives.
   - Never preserve or repeat original-language text; translate names, terms, and sound effects using natural {target}
   conventions.
+  - Translate only the {source} parts. Leave words in other languages or scripts (e.g. "TikTok", brand names, usernames)
+  exactly as written.
 
   Output requirements:
   - Each input segment has a numeric `id`.
