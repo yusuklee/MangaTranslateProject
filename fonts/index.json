@@ -1,0 +1,87 @@
+[
+ {
+  "family": "Bagel Fat One",
+  "regular": "bagelfatone/BagelFatOne-Regular.ttf",
+  "bold": null
+ },
+ {
+  "family": "Black Han Sans",
+  "regular": "blackhansans/BlackHanSans-Regular.ttf",
+  "bold": null
+ },
+ {
+  "family": "Cute Font",
+  "regular": "cutefont/CuteFont-Regular.ttf",
+  "bold": null
+ },
+ {
+  "family": "Do Hyeon",
+  "regular": "dohyeon/DoHyeon-Regular.ttf",
+  "bold": null
+ },
+ {
+  "family": "Dokdo",
+  "regular": "dokdo/Dokdo-Regular.ttf",
+  "bold": null
+ },
+ {
+  "family": "East Sea Dokdo",
+  "regular": "eastseadokdo/EastSeaDokdo-Regular.ttf",
+  "bold": null
+ },
+ {
+  "family": "Gaegu",
+  "regular": "gaegu/Gaegu-Light.ttf",
+  "bold": null
+ },
+ {
+  "family": "Gasoek One",
+  "regular": "gasoekone/GasoekOne-Regular.ttf",
+  "bold": null
+ },
+ {
+  "family": "Gothic A1",
+  "regular": "gothica1/GothicA1-Thin.ttf",
+  "bold": null
+ },
+ {
+  "family": "Nanum Brush Script",
+  "regular": "nanumbrushscript/NanumBrushScript-Regular.ttf",
+  "bold": null
+ },
+ {
+  "family": "NanumGothic",
+  "regular": "nanumgothic/NanumGothic-Regular.ttf",
+  "bold": null
+ },
+ {
+  "family": "NanumMyeongjo",
+  "regular": "nanummyeongjo/NanumMyeongjo-Regular.ttf",
+  "bold": null
+ },
+ {
+  "family": "Nanum Pen",
+  "regular": "nanumpenscript/NanumPenScript-Regular.ttf",
+  "bold": null
+ },
+ {
+  "family": "Noto Sans KR",
+  "regular": "notosanskr/NotoSansKR[wght].ttf",
+  "bold": null
+ },
+ {
+  "family": "Single Day",
+  "regular": "singleday/SingleDay-Regular.ttf",
+  "bold": null
+ },
+ {
+  "family": "Song Myung",
+  "regular": "songmyung/SongMyung-Regular.ttf",
+  "bold": null
+ },
+ {
+  "family": "Sunflower",
+  "regular": "sunflower/Sunflower-Light.ttf",
+  "bold": null
+ }
+]

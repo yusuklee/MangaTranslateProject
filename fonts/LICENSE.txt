@@ -1,0 +1,4 @@
+The fonts in this folder are Google Fonts distributed under the SIL Open Font License 1.1
+(https://openfontlicense.org). Each family retains its original copyright holder; see the
+family page on https://fonts.google.com for details. The fonts may be bundled with this
+application and used freely; they may not be sold by themselves.

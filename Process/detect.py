@@ -17,12 +17,12 @@ from Process.textlines import split_box, font_size
 
 load_dotenv()
 
-HAS_TEXT = re.compile(r'[ぁ-んァ-ヶ一-龯0-9A-Za-z]')
+HAS_TEXT = re.compile(r'[ぁ-んァ-ヶ一-龯가-힣0-9A-Za-z]')   # 글자가 하나라도 있는 상자만 (기호·점만 있는 건 버림)
 
 #상자: koharu 의 RF-DETR (text / onomatopoeia / bubble / panel)
 
 mocr = MangaOcr()
-model = RFDETRSeg2XLarge(pretrain_weights=None, resolutions=1152, num_select=160, num_classes=4)
+model = RFDETRSeg2XLarge(pretrain_weights=None, resolution=1152, num_select=160, num_classes=4)
 model.model.model.load_state_dict(
     load_file(hf_hub_download("mayocream/koharu-layout-rfdetr-seg-2xl-1152", "model.safetensors"), device="cpu"),
     strict=True,
@@ -41,19 +41,12 @@ def mask_to_text(mask_box):
 #조각들을 한 묶음으로 넣어 OCR 1번에 처리
 def ocr_batch(crops, batch=32):
     words = []
-    for i in range(0,len(crops), batch):
-        imgs = [img.convert("L").convert("RGB") for img in crops[i:i+batch]]
-        x = mocr.processor(imgs, return_tensors="pt").pixel_value
+    for i in range(0, len(crops), batch):
+        imgs = [img.convert("L").convert("RGB") for img in crops[i:i + batch]]
+        x = mocr.processor(imgs, return_tensors="pt").pixel_values
         tokens = mocr.model.generate(x.to(mocr.model.device), max_length=300)
-        words+=[post_process(mocr.tokenizer.decode(t, skip_special_tokens=True)) for t in tokens]
-
+        words += [post_process(mocr.tokenizer.decode(t, skip_special_tokens=True)) for t in tokens]
     return words
-
-
-
-
-
-
 
 
 #지우기용 상자: RF-DETR 상자를 ctd 획 덩어리에 맞게 넓힌 것 (상자 경계에서 획이 잘리면 LaMa 결과에 줄무늬가 생김)
@@ -95,16 +88,18 @@ def text_colors(arr, page_mask, box):
 
 
 #페이지 하나 → 글자 상자 목록. 각 항목:
-#  pos       : 상자 (OCR·번역·렌더용)          erase : 지우기용 넓힌 상자, mask 는 이 크기의 base64 PNG
+#  pos       : 상자 (OCR·번역·렌더용)          mask_area : 지우기용 넓힌 상자, mask 는 이 크기의 base64 PNG
 #  word      : OCR 원문                         bubble: 글자를 담은 말풍선 상자 (없으면 None)
 #  font_size : 원본 글자 크기 px               color / stroke : 글자색, 테두리색
-def detect_file(file):
+#classes: 글자로 볼 RF-DETR 종류. 기본은 "text" 만, 설정에서 의성어를 켜면 ("text", "onomatopoeia")
+def detect_file(file, classes=("text",)):
     image = file.convert("RGB")
     arr = np.array(image)
 
     d = model.predict(image)
-    text_boxes = [tuple(map(int, b)) for b, n in zip(d.xyxy, d.data["class_name"]) if n == "text"]
-    bubbles = [tuple(map(int, b)) for b, n in zip(d.xyxy, d.data["class_name"]) if n == "bubble"]
+    xyxy, names = d.xyxy, d.data["class_name"]
+    text_boxes = [tuple(map(int, b)) for b, n in zip(xyxy, names) if n in classes]
+    bubbles = [tuple(map(int, b)) for b, n in zip(xyxy, names) if n == "bubble"]
 
     prob, line_map = ctd_maps(image)
     page_mask = koharu_mask(prob)
@@ -130,7 +125,7 @@ def detect_file(file):
         color, stroke = text_colors(arr, page_mask, erase)
         lines.append({
             "pos": pos,
-            "erase": erase,
+            "mask_area": erase,
             "word": word,
             "page": 1,
             "mask": mask_to_text(page_mask[ey1:ey2, ex1:ex2]),

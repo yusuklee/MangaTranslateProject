@@ -7,3 +7,10 @@ flux2-klein-8bit/
 fonts_cache.json
 __pycache__/
 *.pyc
+
+dist/
+build/MangaTranslator/
+build/work/
+build/out/
+build/pyinstaller.log
+build/cache/

@@ -1,54 +1,67 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import type { Content } from "../../Project";
 
-export function Text({
+//오른쪽 글자 목록. 항목을 누르면 원문과 번역문 입력칸이 펼쳐진다
+export const Text = memo(function Text({
   contents,
   selectedArea,
   onSelect,
+  onEdit,
+  onCollapse,
 }: {
   contents: Content[];
   selectedArea: string | null;
   onSelect: (key: string | null) => void;
+  onEdit: (id: number, translated: string) => void; //번역문 직접 고치기 → 그림·내보내기에 반영
+  onCollapse?: () => void; //패널 접기 (VS Code 사이드바처럼)
 }) {
   const [openGroup, setOpenGroup] = useState(true);
 
   return (
-    <div className="p-4">
-      <button
-        onClick={() => setOpenGroup(!openGroup)}
-        className="flex w-full items-center gap-2 text-xs font-semibold text-gray-500"
-      >
-        <span>{openGroup ? "▼" : "▶"}</span>
-        <span>TEXT</span>
-        <span className="rounded-full bg-black/5 px-2 py-0.5">
-          {contents.length}
-        </span>
-      </button>
+    <div>
+      <div className="flex h-9 items-center border-b pr-2 text-[11px] font-semibold tracking-wide text-muted-foreground">
+        <button onClick={() => setOpenGroup(!openGroup)} className="flex h-full flex-1 items-center gap-2 px-3 hover:bg-muted">
+          <span className="text-[9px]">{openGroup ? "▼" : "▶"}</span>
+          <span>TEXT</span>
+          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px]">{contents.length}</span>
+        </button>
+        {onCollapse && (
+          <button className="rounded px-1 text-[10px] hover:bg-muted" onClick={onCollapse} title="Collapse">▶</button>
+        )}
+      </div>
 
       {openGroup && (
-        <div className="mt-3 grid gap-2">
+        <div className="grid gap-1.5 p-2">
+          {contents.length === 0 && (
+            <div className="flex flex-col items-center gap-1 px-2 py-10 text-center">
+              <span className="text-2xl">💬</span>
+              <p className="text-sm font-medium text-muted-foreground">No detections</p>
+            </div>
+          )}
           {contents.map((c) => {
-            const key = `${c.line_id}`;
+            const key = `${c.id}`;
             const open = selectedArea === key;
             return (
               <div
-                key={c.line_id}
+                key={c.id}
                 onClick={() => onSelect(open ? null : key)}
-                className={`cursor-pointer rounded-md border p-2 ${
-                  open ? "border-red-500" : "border-gray-200"
+                className={`cursor-pointer rounded-lg border p-2.5 transition-colors ${
+                  open ? "border-primary bg-accent/60" : "border-border bg-background hover:bg-muted"
                 }`}
               >
-                <p className="text-sm">{c.translated ?? c.original}</p>
+                <p className="text-sm leading-snug">{c.translated ?? c.word}</p>
                 {open && (
-                  <div className="mt-1 border-t pt-1">
-                    <p className="text-[10px] text-gray-400">source</p>
-                    <p className="text-xs text-gray-500">{c.original}</p>
-                    <p className="mt-1 text-[10px] text-gray-400">translation</p>
-                    <input
-                      key={c.translated ?? ""}
-                      defaultValue={c.translated ?? ""}
+                  <div className="mt-2 border-t pt-2">
+                    <p className="text-[10px] font-medium text-muted-foreground">Source</p>
+                    <p className="text-xs text-muted-foreground">{c.word}</p>
+                    <p className="mt-2 text-[10px] font-medium text-muted-foreground">Translation</p>
+                    <textarea
+                      value={c.translated ?? ""}
+                      rows={2}
+                      placeholder="Type the translation"
                       onClick={(e) => e.stopPropagation()}
-                      className="w-full text-sm outline-none"
+                      onChange={(e) => onEdit(c.id, e.target.value)}
+                      className="mt-0.5 w-full resize-y rounded-md border bg-background px-2 py-1 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                     />
                   </div>
                 )}
@@ -59,4 +72,4 @@ export function Text({
       )}
     </div>
   );
-}
+});

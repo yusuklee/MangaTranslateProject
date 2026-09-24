@@ -1,0 +1,25 @@
+# 앱이 첫 실행 때 사용자 PC 에 설치하는 패키지 (launch.py 가 pip 으로 %LOCALAPPDATA%\MangaTranslator\pylib 에 넣는다).
+# 버전은 개발 PC(conda env yusuk1, Python 3.13) 와 같게 고정. torch 는 PyTorch 의 cu128 인덱스에서 받는다 (launch.py 가 --index-url 지정).
+# simple-lama-inpainting 은 numpy<2 를 요구해(실제론 2.x 로 잘 돈다) 여기 안 넣고 launch.py 가 --no-deps 로 따로 설치한다.
+torch==2.11.0
+torchvision==0.26.0
+rfdetr==1.7.0
+manga-ocr==0.1.16
+fire
+transformers==5.16.1
+supervision==0.28.0
+huggingface_hub
+safetensors==0.8.0
+numpy==2.4.2
+opencv-python-headless==5.0.0.93
+pillow==12.0.0
+onnxruntime-gpu==1.30.0
+fonttools==4.61.1
+fastapi==0.136.3
+uvicorn==0.40.0
+python-multipart==0.0.22
+python-dotenv==1.2.1
+google-genai==2.25.0
+jaconv==0.5.0
+pywebview==6.2.1
+requests==2.32.5

@@ -2,9 +2,7 @@ import base64, io
 import numpy as np
 import cv2
 from PIL import Image
-from dotenv import load_dotenv
 from Process.textmask import square
-load_dotenv()
 
 #글자 지우기 공통 부분. 마스크는 detect 가 만든 koharu 방식 글자 획 마스크(contents["mask"])를 쓰고,
 #여기서는 인페인팅 직전 팽창(글자 크기 기준 2~8px)만 더한다. 단색 배경은 모델 없이 바로 채운다.
@@ -37,7 +35,7 @@ def box_masks(image, contents):
     W, H = image.size
     out = []
     for c in contents:
-        x1, y1, x2, y2 = map(int, c.get("erase") or c["pos"])
+        x1, y1, x2, y2 = map(int, c.get("mask_area") or c["pos"])
         r = block_radius((x1, y1, x2, y2))
         ex1, ey1, ex2, ey2 = max(0, x1 - r), max(0, y1 - r), min(W, x2 + r), min(H, y2 + r)
         page = np.zeros((H, W), np.uint8)
