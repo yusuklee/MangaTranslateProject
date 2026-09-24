@@ -4,7 +4,6 @@
 
 <p align="center">
 <a href="https://github.com/yusuklee/MangaTranslateProject/releases/latest"><img alt="Download" src="https://img.shields.io/github/v/release/yusuklee/MangaTranslateProject?style=for-the-badge&label=Download&color=f2760a"></a>
-<a href="https://github.com/yusuklee/MangaTranslateProject/releases/latest"><img alt="Downloads" src="https://img.shields.io/github/downloads/yusuklee/MangaTranslateProject/total?style=for-the-badge&color=0a1033"></a>
 </p>
 
 <p align="center">
