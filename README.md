@@ -1,7 +1,7 @@
 <h1 align="center">Manga Translator</h1>
 
 <p align="center">
-<a href="https://github.com/yusuklee/MangaTranslateProject/releases/latest/download/Installer.exe"><img alt="Download" src="https://img.shields.io/github/v/release/yusuklee/MangaTranslateProject?style=for-the-badge&label=Download&color=f2760a"></a>
+<a href="https://github.com/yusuklee/MangaTranslateProject/releases/latest/download/MangaTranslator.zip"><img alt="Download" src="https://img.shields.io/github/v/release/yusuklee/MangaTranslateProject?style=for-the-badge&label=Download&color=f2760a"></a>
 </p>
 
 ---
@@ -10,9 +10,11 @@
 
 ## Install
 
-1. [Download Installer.exe](https://github.com/yusuklee/MangaTranslateProject/releases/latest/download/Installer.exe) and run it. No admin rights needed.
-2. Start **Manga Translator** from the Start menu. The first start downloads PyTorch and the models (about 4 GB, one time) and shows the progress. Later starts open right away.
+1. [Download MangaTranslator.zip](https://github.com/yusuklee/MangaTranslateProject/releases/latest/download/MangaTranslator.zip) and extract it anywhere (a short path like `C:\MangaTranslator` is best).
+2. Run **MangaTranslator.bat**. The first start downloads PyTorch and the models (about 4 GB, one time) into the same folder and shows the progress. Later starts open right away.
 3. Open **Settings** and paste your [Gemini API key](https://aistudio.google.com/apikey).
+
+Everything (packages, models, your projects) stays inside that folder. To uninstall, delete the folder.
 
 > [!NOTE]
 > Works on any Windows 10/11 PC. With an NVIDIA GPU (driver 570 or newer, no CUDA toolkit needed) a page takes about a second. Without one it falls back to the CPU and is much slower.

@@ -1,11 +1,12 @@
-"""포터블 앱 실행기 (BallonsTranslator 방식). 설치 파일에는 파이썬(embeddable)·앱 코드·글꼴·작은 모델만 들어 있고,
-무거운 패키지(torch 등 약 3GB)와 모델 가중치는 처음 실행할 때 사용자 PC 에 받는다.
+"""포터블 앱 실행기 (BallonsTranslator 방식). zip 에는 파이썬(embeddable)·앱 코드·글꼴·작은 모델만 들어 있고,
+무거운 패키지(torch 등 약 3GB)와 모델 가중치는 처음 실행할 때 받는다. 전부 앱 폴더 안에 두므로 폴더를 지우면 깨끗이 사라진다.
 
-    <앱 폴더>\\python\\pythonw.exe launch.py      ← 바로 가기가 이걸 실행한다
+    <앱 폴더>\\MangaTranslator.bat  →  python\\pythonw.exe launch.py
 
-  %LOCALAPPDATA%\\MangaTranslator\\pylib\\   requirements.txt 의 패키지 (pip --target). 앱을 지우거나 업데이트해도 남는다
-  %LOCALAPPDATA%\\MangaTranslator\\hf\\      Hugging Face 모델 캐시 (RF-DETR, manga-ocr)
-  %LOCALAPPDATA%\\MangaTranslator\\logs\\    app.log (pythonw 는 콘솔이 없으므로 출력을 여기로)
+  <앱 폴더>\\pylib\\      requirements.txt 의 패키지 (pip --target)
+  <앱 폴더>\\hf\\         Hugging Face 모델 캐시 (RF-DETR, manga-ocr)
+  <앱 폴더>\\projects\\   사용자 프로젝트
+  <앱 폴더>\\logs\\       app.log (pythonw 는 콘솔이 없으므로 출력을 여기로)
 
 흐름: 창을 먼저 띄우고 → (없으면) pip 설치 → (없으면) 모델 다운로드 → 서버 시작 → 창을 앱으로 넘김.
 로딩 화면에는 진행 막대와 퍼센트만 보여 준다 (pip 의 "Collecting ..." 같은 줄은 로그 파일로만).
@@ -29,7 +30,7 @@ PYTHON = os.path.join(ROOT, "python", "python.exe")
 PIP = os.path.join(ROOT, "pip.pyz")
 REQUIREMENTS = os.path.join(ROOT, "requirements.txt")
 REQUIREMENTS_TOTAL = os.path.join(ROOT, "requirements.total")   # build/make_portable.py 가 잰 첫 실행 다운로드 총 바이트
-DATA = os.environ.get("MANGA_DATA_DIR") or os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "MangaTranslator")
+DATA = os.environ.get("MANGA_DATA_DIR") or ROOT
 PYLIB = os.path.join(DATA, "pylib")
 MARK = os.path.join(PYLIB, ".installed")
 TORCH_INDEX = "https://download.pytorch.org/whl/cu128"
@@ -49,6 +50,7 @@ def setup_env():
         log = open(os.path.join(DATA, "logs", "app.log"), "a", encoding="utf-8", buffering=1)
         sys.stdout = sys.stderr = log
     os.environ["HF_HOME"] = os.path.join(DATA, "hf")
+    os.environ.setdefault("MANGA_PROJECTS_DIR", os.path.join(DATA, "projects"))
     os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
     os.environ.setdefault("LAMA_MODEL", os.path.join(ROOT, "anime-manga-big-lama.pt"))
     os.environ.setdefault("CTD_MODEL", os.path.join(ROOT, "comictextdetector.pt.onnx"))

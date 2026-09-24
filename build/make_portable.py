@@ -1,10 +1,12 @@
-"""포터블 앱 폴더 만들기 (BallonsTranslator 방식) → dist/MangaTranslator/
+"""포터블 앱 만들기 (BallonsTranslator 방식) → dist/MangaTranslator/ 와 dist/MangaTranslator.zip
     python build/make_portable.py
+zip 을 GitHub 릴리스에 올린다. 사용자는 압축을 풀고 MangaTranslator.bat 을 실행한다. 설치 프로그램은 없고, 지울 때는 폴더를 지운다.
 
 들어가는 것:
     python/            python.org embeddable (3.13, 약 11MB). python313._pth 로 앱 폴더와 pylib_boot 를 경로에 넣는다
     pip.pyz            pip (첫 실행 때 requirements.txt 설치용)
-    pylib_boot/        pywebview(설치 진행 창용)·setuptools·wheel 만 미리 설치. 나머지는 첫 실행 때 사용자 PC 의 pylib 에
+    pylib_boot/        pywebview(설치 진행 창용)·setuptools·wheel 만 미리 설치. 나머지는 첫 실행 때 같은 폴더의 pylib/ 에
+    MangaTranslator.bat  실행 파일 (python\\pythonw.exe launch.py)
     launch.py app.py backend.py Process/ frontend/dist/ fonts/ requirements.txt icon.ico
     comictextdetector.pt.onnx (91MB), anime-manga-big-lama.pt (197MB)
 안 들어가는 것: torch 등 (첫 실행 때 약 3GB 설치), RF-DETR·manga-ocr 가중치 (첫 실행 때 Hugging Face 에서), .env
@@ -52,6 +54,8 @@ def main():
     shutil.copytree(os.path.join(ROOT, "frontend", "dist"), os.path.join(OUT, "frontend", "dist"))
     shutil.copytree(os.path.join(ROOT, "fonts"), os.path.join(OUT, "fonts"))
     shutil.copy2(os.path.join(ROOT, "build", "icon.ico"), os.path.join(OUT, "icon.ico"))
+    with open(os.path.join(OUT, "MangaTranslator.bat"), "w", encoding="ascii", newline="") as f:
+        f.write('@echo off\r\nstart "" "%~dp0python\\pythonw.exe" "%~dp0launch.py"\r\n')
 
     # 3) 진행 창용 pywebview 만 미리 설치
     py = os.path.join(OUT, "python", "python.exe")
@@ -68,6 +72,14 @@ def main():
 
     total = sum(os.path.getsize(os.path.join(b, f)) for b, _, fs in os.walk(OUT) for f in fs)
     print(f"done: {OUT}  ({total / 1e6:.0f} MB)")
+
+    zip_out = OUT + ".zip"
+    with zipfile.ZipFile(zip_out, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
+        for b, _, fs in os.walk(OUT):
+            for f in fs:
+                path = os.path.join(b, f)
+                z.write(path, os.path.relpath(path, os.path.dirname(OUT)))
+    print(f"zip: {zip_out}  ({os.path.getsize(zip_out) / 1e6:.0f} MB)")
 
 
 def write_download_total(py):
