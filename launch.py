@@ -1,19 +1,4 @@
-"""포터블 앱 실행기 (BallonsTranslator 방식). zip 에는 파이썬(embeddable)·앱 코드·글꼴·작은 모델만 들어 있고,
-무거운 패키지(torch 등 약 3GB)와 모델 가중치는 처음 실행할 때 받는다. 전부 앱 폴더 안에 두므로 폴더를 지우면 깨끗이 사라진다.
 
-    MangaTranslator\\MangaTranslator.bat  →  app\\python\\pythonw.exe app\\launch.py
-
-  app\\pylib\\      requirements.txt 의 패키지 (pip --target)
-  app\\hf\\         Hugging Face 모델 캐시 (RF-DETR, manga-ocr)
-  app\\projects\\   사용자 프로젝트
-  app\\logs\\       app.log (pythonw 는 콘솔이 없으므로 출력을 여기로)
-
-흐름: 창을 먼저 띄우고 → (없으면) pip 설치 → (없으면) 모델 다운로드 → 서버 시작 → 창을 앱으로 넘김.
-로딩 화면에는 진행 막대와 퍼센트만 보여 준다 (pip 의 "Collecting ..." 같은 줄은 로그 파일로만).
-  - pip 진행률: pip 의 --progress-bar raw 가 찍는 "Progress X of Y" 줄을 읽어 누적 바이트 / requirements.total (빌드 때 잰 총량)
-  - 모델 진행률: Hugging Face 파일 크기 합 대비 받은 바이트 (tqdm 훅)
-실패하면 메시지와 Retry 버튼. 개발 PC 에서는 이 파일 대신 `python app.py` 를 쓴다.
-"""
 import fnmatch
 import hashlib
 import os
@@ -93,6 +78,9 @@ def free_port():
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
+
+
+
 
 
 #pip 출력 줄에서 다운로드 진행률을 계산한다. 파일마다 "Downloading x.whl (7.0 MB)" 뒤에 "Progress X of Y" 가 이어진다
@@ -314,6 +302,9 @@ class Api:
 
     def pick_folder(self):
         return self._boot.pick_folder()
+
+    def fullscreen(self):
+        self._boot.window.toggle_fullscreen()
 
 
 def main():

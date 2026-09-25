@@ -17,9 +17,7 @@ from Process.textlines import split_box, font_size
 
 load_dotenv()
 
-HAS_TEXT = re.compile(r'[ぁ-んァ-ヶ一-龯가-힣0-9A-Za-z]')   # 글자가 하나라도 있는 상자만 (기호·점만 있는 건 버림)
-
-#상자: koharu 의 RF-DETR (text / onomatopoeia / bubble / panel)
+HAS_TEXT = re.compile(r'[ぁ-んァ-ヶ一-龯가-힣0-9A-Za-z]')
 
 mocr = MangaOcr()
 model = RFDETRSeg2XLarge(pretrain_weights=None, resolution=1152, num_select=160, num_classes=4)
@@ -58,7 +56,7 @@ def erase_box(labels, bbox, box):
     return (x1, y1, x2, y2)
 
 
-#글자 상자 중심을 품는 가장 작은 말풍선. 말풍선 하나를 글자 상자 둘 이상이 나눠 쓰면 안 쓴다 (풍선을 나눠야 해서)
+
 def assign_bubbles(boxes, bubbles):
     def owner(box):
         cx, cy = (box[0] + box[2]) // 2, (box[1] + box[3]) // 2
@@ -69,9 +67,7 @@ def assign_bubbles(boxes, bubbles):
     return [None if b in shared else b for b in owners]
 
 
-#글자색·테두리색 (BallonsTranslator 방식). 마스크는 두껍게 부풀린 거라 배경도 섞여 있으니
-#마스크 픽셀을 밝기순으로 나눠 어두운 쪽·밝은 쪽 대표색을 구하고, 배경(마스크 밖)과 더 다른 쪽이 글자색.
-#만화 글자는 거의 흑 아니면 백이라 둘 중 하나로 정리한다. 흰 글자면 검정 테두리
+
 def text_colors(arr, page_mask, box):
     x1, y1, x2, y2 = box
     crop, m = arr[y1:y2, x1:x2], page_mask[y1:y2, x1:x2]
@@ -87,19 +83,15 @@ def text_colors(arr, page_mask, box):
     return ("#ffffff", "#000000") if lum(fg) > lum(bg) else ("#000000", None)
 
 
-#페이지 하나 → 글자 상자 목록. 각 항목:
-#  pos       : 상자 (OCR·번역·렌더용)          mask_area : 지우기용 넓힌 상자, mask 는 이 크기의 base64 PNG
-#  word      : OCR 원문                         bubble: 글자를 담은 말풍선 상자 (없으면 None)
-#  font_size : 원본 글자 크기 px               color / stroke : 글자색, 테두리색
-#classes: 글자로 볼 RF-DETR 종류. 기본은 "text" 만, 설정에서 의성어를 켜면 ("text", "onomatopoeia")
+
 def detect_file(file, classes=("text",)):
     image = file.convert("RGB")
     arr = np.array(image)
 
     d = model.predict(image)
     xyxy, names = d.xyxy, d.data["class_name"]
-    text_boxes = [tuple(map(int, b)) for b, n in zip(xyxy, names) if n in classes]
-    bubbles = [tuple(map(int, b)) for b, n in zip(xyxy, names) if n == "bubble"]
+    text_boxes = [tuple(max(0,int(v)) for v in b) for b, n in zip(xyxy, names) if n in classes]
+    bubbles = [tuple(max(0,int(v)) for v in b) for b, n in zip(xyxy, names) if n == "bubble"]
 
     prob, line_map = ctd_maps(image)
     page_mask = koharu_mask(prob)

@@ -23,7 +23,7 @@ type DirHandle = {
 declare global {
   interface Window {
     showDirectoryPicker?(opts?: { mode?: "read" | "readwrite" }): Promise<DirHandle>;
-    pywebview?: { api: { pick_folder(): Promise<{ path: string } | null> } };
+    pywebview?: { api: { pick_folder(): Promise<{ path: string } | null>; fullscreen(): Promise<void> } };
   }
 }
 

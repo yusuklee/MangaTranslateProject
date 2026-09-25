@@ -9,6 +9,7 @@ from Process.inpaint_normal import inpaint_white
 from Process.inpaint_lama import inpaint_lama
 from Process.fonts import list_korean_fonts, FONTS_DIR
 from google.genai import errors as genai_errors
+ROOT = os.path.dirname(__file__)
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -80,6 +81,15 @@ async def export_file(file: UploadFile, folder: str = Form(...), name: str = For
     return {"ok": True}
 
 
+
+@app.post("/api_key")
+def save_api_key(api_key:str=Form(...)):
+    with open(os.path.join(ROOT, ".env"), "w", encoding="utf-8") as f:
+        f.write(f"GEMINI_API_KEY={api_key}\n")
+    os.environ["GEMINI_API_KEY"] = api_key
+
+
+
 #어떤 모델이 메모리에 올라와 있는지. detect 모델(RF-DETR·OCR)은 서버 시작 때 올라오니 응답이 오면 이미 준비된 것.
 #LaMa·FLUX 는 처음 쓸 때 올라온다. 프런트가 "모델 불러오는 중" 표시에 쓴다
 @app.get("/models")
@@ -107,6 +117,8 @@ def fonts():
 #프로젝트 저장 (코하루식 디스크 저장): /projects/... — Process/projects.py
 from Process.projects import router as projects_router
 app.include_router(projects_router)
+
+
 
 
 #데스크톱 앱: 빌드된 프런트(frontend/dist)를 / 에서 직접 서빙. API 경로들 뒤에 두어야 /detect 같은 게 먼저 잡힌다

@@ -24,7 +24,7 @@ PROMPT = """You are a professional manga translator.
   - Never merge, split, omit, duplicate, or add segments."""
 
 
-#응답 형태를 고정해서 모델이 다른 걸 붙이지 못하게 한다
+#응답 형태를 고정
 SCHEMA = {
     "type": "OBJECT",
     "properties": {

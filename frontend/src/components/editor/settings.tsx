@@ -1,5 +1,6 @@
 import { memo, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { API } from "@/api";
 import { FontPicker } from "./fontpicker";
 import type { FontChoice } from "../../Project";
 
@@ -30,6 +31,25 @@ export const saveSettings = (s: AppSettings, fontFamily: string) => {
 const KEY_STORAGE = "gemini_api_key";
 export const loadApiKey = () => { try { return localStorage.getItem(KEY_STORAGE) ?? ""; } catch { return ""; } };
 const saveApiKey = (k: string) => { try { k ? localStorage.setItem(KEY_STORAGE, k) : localStorage.removeItem(KEY_STORAGE); } catch { /* 저장 못 해도 동작엔 지장 없음 */ } };
+
+//Save 버튼: 키를 백엔드로 보내 .env 에 저장 (앱을 껐다 켜도 서버가 이 키를 쓴다)
+const postApiKey = async (k: string) => {
+  const body = new FormData();
+  body.append("api_key", k);
+  const r = await fetch(`${API}/api_key`, { method: "POST", body });
+  if (!r.ok) throw new Error(`${r.status}`);
+};
+
+//Show/Hide 버튼용 눈 아이콘 (off = 사선)
+function EyeIcon({ off }: { off: boolean }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+      <circle cx="12" cy="12" r="3" />
+      {off && <line x1="3" y1="3" x2="21" y2="21" />}
+    </svg>
+  );
+}
 
 const INPAINT_MODELS: { value: InpaintModel; label: string; hint: string }[] = [
   { value: "inpaint_normal", label: "None", hint: "Fill text areas with white. Fastest." },
@@ -100,6 +120,7 @@ export const SettingsDialog = memo(function SettingsDialog({
   const [customCalls, setCustomCalls] = useState(typeof settings.calls === "number" && !CALL_PRESETS.includes(settings.calls as never));
   const [customStr, setCustomStr] = useState(typeof settings.calls === "number" ? String(settings.calls) : "3");
   const [showKey, setShowKey] = useState(false);
+  const [keySave, setKeySave] = useState<"" | "saving" | "saved" | "failed">("");
 
   //Esc 로 닫기
   useEffect(() => {
@@ -196,16 +217,26 @@ export const SettingsDialog = memo(function SettingsDialog({
                   <p className="mb-1 mt-3 text-[11px] font-medium text-muted-foreground">API key</p>
                   <div className="flex items-center gap-1">
                     <input
-                      className={`${selectCls} w-0 min-w-0 flex-1 font-mono`}
+                      className={`${selectCls} w-64 min-w-0 font-mono`}
                       type={showKey ? "text" : "password"}
                       placeholder="AIza..."
                       autoComplete="off"
                       spellCheck={false}
                       value={settings.apiKey}
-                      onChange={(e) => { const k = e.target.value.trim(); saveApiKey(k); set({ apiKey: k }); }}
+                      onChange={(e) => { const k = e.target.value.trim(); saveApiKey(k); set({ apiKey: k }); setKeySave(""); }}
                     />
-                    <button className="h-8 shrink-0 rounded-lg border px-2 text-xs hover:bg-muted" onClick={() => setShowKey(!showKey)} title={showKey ? "Hide" : "Show"}>
-                      {showKey ? "Hide" : "Show"}
+                    <button className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border hover:bg-muted" onClick={() => setShowKey(!showKey)} title={showKey ? "Hide" : "Show"}>
+                      <EyeIcon off={showKey} />
+                    </button>
+                    <button
+                      className="h-8 shrink-0 rounded-lg border px-3 text-xs hover:bg-muted disabled:opacity-50"
+                      disabled={!settings.apiKey || keySave === "saving"}
+                      onClick={async () => {
+                        setKeySave("saving");
+                        try { await postApiKey(settings.apiKey); setKeySave("saved"); } catch { setKeySave("failed"); }
+                      }}
+                    >
+                      {keySave === "saving" ? "Saving..." : keySave === "saved" ? "Saved" : keySave === "failed" ? "Failed" : "Save"}
                     </button>
                   </div>
                   <p className="mt-1.5 text-[11px] text-muted-foreground">

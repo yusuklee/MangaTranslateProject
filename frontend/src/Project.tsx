@@ -143,6 +143,7 @@ export function Project({
   });
   const [selectedArea, setSelectedArea] = useState<string | null>(null);
   const [progress, setProgress] = useState(""); //진행 상황 / 에러 (하단 표시)
+  const [callBar, setCallBar] = useState<boolean[] | null>(null); //TRANSLATE 중 호출별 도착 여부 (하단 칸 막대). null = 막대 없음
   //보기 모드: 원본 / 글자 지운 그림 / 번역문 얹은 그림. 아직 없는 단계를 고르면 있는 것까지만 보여준다 (원본만 있으면 계속 원본)
   type View = "original" | "inpainted" | "rendered";
   const [view, setView] = useState<View>("original");
@@ -150,8 +151,17 @@ export function Project({
   //가운데 보기: "width" = 폭에 맞춤(세로는 스크롤), "page" = 한 화면에 다 보이게. fullscreen 은 브라우저 전체화면
   const [fit, setFit] = useState<"width" | "page">("page"); //기본은 한 화면 맞춤
   const [fullscreen, setFullscreen] = useState(false);
+  //앱(pywebview) 창은 그림 영역 전체화면을 해도 창 크기에 머문다 → 창 자체도 같이 모니터 전체로 켜고 끈다 (Esc 로 나가도 같이 꺼짐)
+  const windowFullscreen = useRef(false);
   useEffect(() => {
-    const onChange = () => setFullscreen(!!document.fullscreenElement);
+    const onChange = () => {
+      const on = !!document.fullscreenElement;
+      setFullscreen(on);
+      if (isDesktopApp() && on !== windowFullscreen.current) {
+        windowFullscreen.current = on;
+        void window.pywebview!.api.fullscreen();
+      }
+    };
     document.addEventListener("fullscreenchange", onChange);
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
@@ -287,21 +297,47 @@ const handle_detect = async (page=selectedPage!)=>{
 
 }
 
-//한 페이지 번역 (PROCESS 드롭다운의 TRANSLATE 단계). 여러 페이지를 모아 보내는 건 handle_all
-const handle_translate = async(page=selectedPage!)=>{
-    const contents = pageContents[page];
-    if (!contents) return;
-    const translations = await translate(contents.map((r)=>{
-        return {id:r.id, word:r.word}
-    })) //translations = {1:한글1, 2: 한글2}
+//선택한 여러 페이지 번역 (TRANSLATE 단계). 줄을 모아 handle_all 처럼 settings.calls 번으로 나눠 동시에 보낸다
+//호출이 하나 올 때마다 TRANSLATE k/n 과 하단 막대의 그 칸을 갱신. DETECT 안 한 페이지는 건너뜀
+const handle_translate_pages = async (targets: string[]) => {
+    const gid = (pageIndex: number, id: number) => pageIndex * 10000 + id;
+    const detected = targets.filter((page) => pageContents[page]);
+    const lines = detected.flatMap((page, pi) => pageContents[page].map((c) => ({ id: gid(pi, c.id), word: c.word })));
 
-    setPageContents((prev)=>{
-        return {...prev,
-            [page]:contents.map((content)=>{
-                return {...content, translated:translations[content.id]}
-            }) //각각의 Content 에서 translate한거를 집어넣기
+    const wanted = settings.calls === "auto" ? Math.ceil(detected.length / PAGES_PER_CALL) : settings.calls;
+    const calls = Math.max(1, Math.min(wanted, lines.length));
+    const size = Math.ceil(lines.length / calls);
+    const parts = Array.from({ length: calls }, (_, k) => lines.slice(k * size, (k + 1) * size)).filter((p) => p.length);
+
+    let arrived = 0;
+    let failed = false; //하나가 실패하면 뒤늦게 온 응답이 에러 문구를 덮지 않게
+    setCallBar(parts.map(() => false));
+    setProgress(`TRANSLATE 0/${parts.length} (${settings.model})`);
+    let translations: Record<string, string>;
+    try {
+      const res = await Promise.all(parts.map((part, k) => translate(part).then((r) => {
+        if (!failed) {
+          arrived++;
+          setCallBar((bar) => bar && bar.map((v, j) => v || j === k));
+          setProgress(`TRANSLATE ${arrived}/${parts.length} (${settings.model})`);
         }
-    })
+        return r;
+      })));
+      translations = Object.assign({}, ...res);
+    } catch (e) {
+      failed = true;
+      throw e;
+    } finally {
+      setCallBar(null);
+    }
+
+    setPageContents((prev) => {
+      const next = { ...prev };
+      detected.forEach((page, pi) => {
+        next[page] = pageContents[page].map((c) => ({ ...c, translated: translations[gid(pi, c.id)] }));
+      });
+      return next;
+    });
 }
 
 const handle_inpaint=async(inpaint_model:string=inpaintModel,page=selectedPage!, target?:Content[])=>{
@@ -428,10 +464,10 @@ const handle_inpaint=async(inpaint_model:string=inpaintModel,page=selectedPage!,
   //단계 하나만 선택한 페이지 전부에 실행
   const run_step = async (step: "detect" | "translate" | "inpaint") => {
     const label = { detect: "DETECT", translate: "TRANSLATE", inpaint: "INPAINT" }[step];
-    for (const [i, page] of targetPages.entries()) {
+    if (step === "translate") await handle_translate_pages(targetPages);
+    else for (const [i, page] of targetPages.entries()) {
       setProgress(`${label} ${i + 1}/${targetPages.length}`);
       if (step === "detect") await handle_detect(page);
-      else if (step === "translate") await handle_translate(page);
       else await handle_inpaint(inpaintModel, page);
     }
     if (step === "inpaint") setView("inpainted");
@@ -614,8 +650,16 @@ const handle_inpaint=async(inpaint_model:string=inpaintModel,page=selectedPage!,
         <span>{viewLabel[shownView]} view</span>
         <span>·</span>
         <span>{settings.source} → {settings.target}</span>
+        {/* TRANSLATE 진행 막대: 칸 = API 호출, 응답이 온 칸만 색칠 */}
+        {callBar && (
+          <div className="ml-auto flex h-1.5 w-40 shrink-0 gap-0.5" title={`${callBar.filter(Boolean).length}/${callBar.length}`}>
+            {callBar.map((done, k) => (
+              <div key={k} className={`flex-1 rounded-sm ${done ? "bg-primary" : "bg-border"}`} />
+            ))}
+          </div>
+        )}
         {progress && (
-          <span className={`ml-auto rounded-full px-2.5 py-0.5 ${isError ? "bg-destructive/10 text-destructive" : "bg-accent text-accent-foreground"}`}>
+          <span className={`${callBar ? "" : "ml-auto "}rounded-full px-2.5 py-0.5 ${isError ? "bg-destructive/10 text-destructive" : "bg-accent text-accent-foreground"}`}>
             {progress}
           </span>
         )}

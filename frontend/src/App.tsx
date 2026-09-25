@@ -17,7 +17,7 @@ export type ProjectDetail = {
 //데스크톱 앱(pywebview)이면 window.pywebview.api 가 있다. 폴더 선택창을 앱이 직접 띄운다
 declare global {
   interface Window {
-    pywebview?: { api: { pick_folder(): Promise<{ path: string } | null> } };
+    pywebview?: { api: { pick_folder(): Promise<{ path: string } | null>; fullscreen(): Promise<void> } };
   }
 }
 const isDesktop = () => !!window.pywebview?.api;
