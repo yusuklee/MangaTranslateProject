@@ -22,13 +22,20 @@ Everything (packages, models, your projects) stays inside that folder. To uninst
 ## setup
 
 ![스크린샷 2026-09-25 005338.png](guide_imgs/%EC%8A%A4%ED%81%AC%EB%A6%B0%EC%83%B7%202026-09-25%20005338.png)![alt text](<스크린샷 2026-09-25 005338.png>)
+
 ---
+
 ![스크린샷 2026-09-25 005357.png](guide_imgs/%EC%8A%A4%ED%81%AC%EB%A6%B0%EC%83%B7%202026-09-25%20005357.png)![alt text](<스크린샷 2026-09-25 005357.png>)
+
 ---
 ![스크린샷 2026-09-25 005427.png](guide_imgs/%EC%8A%A4%ED%81%AC%EB%A6%B0%EC%83%B7%202026-09-25%20005427.png)![alt text](<스크린샷 2026-09-25 005427.png>)
+
 ---
+
 ![설정 버튼 위치.png](guide_imgs/%EC%84%A4%EC%A0%95%20%EB%B2%84%ED%8A%BC%20%EC%9C%84%EC%B9%98.png)![alt text](<설정 버튼 위치.png>)
+
 ---
+
 ![스크린샷 2026-09-25 010132.png](guide_imgs/%EC%8A%A4%ED%81%AC%EB%A6%B0%EC%83%B7%202026-09-25%20010132.png)![alt text](<스크린샷 2026-09-25 010132.png>)
 
 
