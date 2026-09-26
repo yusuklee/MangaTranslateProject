@@ -1,15 +1,4 @@
-"""프로젝트 디스크 저장 (코하루 방식: 프로젝트 = 폴더 하나, 원본을 복사해 자기 완결).
 
-%LOCALAPPDATA%\\MangaTranslator\\projects\\<이름>\\
-    project.json     이름, 만든 날짜, 페이지 목록, 페이지별 글자 상자·번역문
-    pages\\0001.webp  원본 복사본 (번호_원래이름)
-    erased\\0001.png  인페인팅 결과
-
-저장은 임시 파일에 쓴 뒤 이름을 바꿔서(교체) 쓰다 꺼져도 이전 상태가 남는다. 직전 파일은 project.json.bak 으로 남겨 두고,
-project.json 이 깨져 있으면 .bak 을 읽는다.
-project.json 을 읽고-고치고-쓰는 구간은 프로젝트별 잠금으로 묶는다. (자동 저장 PUT state 와 인페인팅 결과 PUT erased 가
-동시에 들어오면 같은 임시 파일을 둘이 쓰다 섞여서 JSON 이 깨진 적이 있다.)
-"""
 import json
 import os
 import re

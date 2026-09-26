@@ -32,7 +32,7 @@ const KEY_STORAGE = "gemini_api_key";
 export const loadApiKey = () => { try { return localStorage.getItem(KEY_STORAGE) ?? ""; } catch { return ""; } };
 const saveApiKey = (k: string) => { try { k ? localStorage.setItem(KEY_STORAGE, k) : localStorage.removeItem(KEY_STORAGE); } catch { /* 저장 못 해도 동작엔 지장 없음 */ } };
 
-//Save 버튼: 키를 백엔드로 보내 .env 에 저장 (앱을 껐다 켜도 서버가 이 키를 쓴다)
+//OK 버튼: 키를 백엔드로 보내 .env 에 저장 (앱을 껐다 켜도 서버가 이 키를 쓴다)
 const postApiKey = async (k: string) => {
   const body = new FormData();
   body.append("api_key", k);
@@ -120,7 +120,6 @@ export const SettingsDialog = memo(function SettingsDialog({
   const [customCalls, setCustomCalls] = useState(typeof settings.calls === "number" && !CALL_PRESETS.includes(settings.calls as never));
   const [customStr, setCustomStr] = useState(typeof settings.calls === "number" ? String(settings.calls) : "3");
   const [showKey, setShowKey] = useState(false);
-  const [keySave, setKeySave] = useState<"" | "saving" | "saved" | "failed">("");
 
   //Esc 로 닫기
   useEffect(() => {
@@ -223,20 +222,10 @@ export const SettingsDialog = memo(function SettingsDialog({
                       autoComplete="off"
                       spellCheck={false}
                       value={settings.apiKey}
-                      onChange={(e) => { const k = e.target.value.trim(); saveApiKey(k); set({ apiKey: k }); setKeySave(""); }}
+                      onChange={(e) => { const k = e.target.value.trim(); saveApiKey(k); set({ apiKey: k }); }}
                     />
                     <button className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border hover:bg-muted" onClick={() => setShowKey(!showKey)} title={showKey ? "Hide" : "Show"}>
                       <EyeIcon off={showKey} />
-                    </button>
-                    <button
-                      className="h-8 shrink-0 rounded-lg border px-3 text-xs hover:bg-muted disabled:opacity-50"
-                      disabled={!settings.apiKey || keySave === "saving"}
-                      onClick={async () => {
-                        setKeySave("saving");
-                        try { await postApiKey(settings.apiKey); setKeySave("saved"); } catch { setKeySave("failed"); }
-                      }}
-                    >
-                      {keySave === "saving" ? "Saving..." : keySave === "saved" ? "Saved" : keySave === "failed" ? "Failed" : "Save"}
                     </button>
                   </div>
                   <p className="mt-1.5 text-[11px] text-muted-foreground">
@@ -274,7 +263,7 @@ export const SettingsDialog = memo(function SettingsDialog({
             )}
           </div>
           <div className="flex h-12 shrink-0 items-center justify-end border-t px-5">
-            <Button size="sm" onClick={onClose}>OK</Button>
+            <Button size="sm" onClick={() => { if (settings.apiKey) postApiKey(settings.apiKey).catch(() => {}); onClose(); }}>OK</Button>
           </div>
         </div>
       </div>

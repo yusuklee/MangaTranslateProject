@@ -3,11 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 import io, os, json
-from Process.detect import detect_file
+from Process.detect_ocr import detect_ocr_page
 from Process.translate import translate_lines
-from Process.inpaint_normal import inpaint_white
-from Process.inpaint_lama import inpaint_lama
-from Process.fonts import list_korean_fonts, FONTS_DIR
+from Process.inpaint import inpaint_white, inpaint_lama
+from fonts.fonts import list_korean_fonts, FONTS_DIR
 from google.genai import errors as genai_errors
 ROOT = os.path.dirname(__file__)
 
@@ -27,12 +26,10 @@ def png_response(out):
 @app.post("/detect")
 async def detect(file: UploadFile, classes: str = Form("text")):
     wanted = tuple(c.strip() for c in classes.split(",") if c.strip()) or ("text",)
-    return detect_file(Image.open(io.BytesIO(await file.read())), wanted)
+    return detect_ocr_page(Image.open(io.BytesIO(await file.read())), wanted)
 
 
-#일반 def → FastAPI 가 스레드에서 돌림. Gemini 응답을 기다리는 동안 inpaint 요청이 같이 처리됨
-#body: {"lines": [{id, word}], "source": "Japanese", "target": "Korean", "model": "gemini-3.6-flash"}
-#Gemini 키는 X-Gemini-Key 헤더로 (설정 창에서 입력한 사용자 키). 없으면 서버 .env 키. 둘 다 없으면 400
+
 @app.post("/translate")
 def translate(body: dict, x_gemini_key: str | None = Header(default=None)):
     try:
@@ -55,16 +52,16 @@ async def inpaint_lama_route(file: UploadFile, contents: str = Form(...)):
     return png_response(inpaint_lama(Image.open(io.BytesIO(await file.read())), json.loads(contents)))
 
 
-#FLUX2 (프롬프트로 지운 뒤 마스크 자리만 덮어씀). 8bit 압축본 flux2-klein-8bit/ 필요
-#torch·diffusers 가 있는 설치에서만 된다. 여기서 늦게 import 해서 없는 빌드에서도 서버는 뜨게 한다
-@app.post("/inpaint_flux")
-async def inpaint_flux_route(file: UploadFile, contents: str = Form(...)):
-    try:
-        from Process.inpaint_flux import inpaint_flux
-        import torch, diffusers  # noqa: F401
-    except ImportError:
-        raise HTTPException(501, "FLUX is not available in this build")
-    return png_response(inpaint_flux(Image.open(io.BytesIO(await file.read())), json.loads(contents)))
+# #FLUX2 (프롬프트로 지운 뒤 마스크 자리만 덮어씀). 8bit 압축본 flux2-klein-8bit/ 필요
+# #torch·diffusers 가 있는 설치에서만 된다. 여기서 늦게 import 해서 없는 빌드에서도 서버는 뜨게 한다
+# @app.post("/inpaint_flux")
+# async def inpaint_flux_route(file: UploadFile, contents: str = Form(...)):
+#     try:
+#         from Process.inpaint import inpaint_flux
+#         import torch, diffusers  # noqa: F401
+#     except ImportError:
+#         raise HTTPException(501, "FLUX is not available in this build")
+#     return png_response(inpaint_flux(Image.open(io.BytesIO(await file.read())), json.loads(contents)))
 
 
 #데스크톱 앱 내보내기: 프런트가 캔버스로 그린 PNG 를 폴더 경로와 함께 보내면 그 폴더에 쓴다.
@@ -94,15 +91,8 @@ def save_api_key(api_key:str=Form(...)):
 #LaMa·FLUX 는 처음 쓸 때 올라온다. 프런트가 "모델 불러오는 중" 표시에 쓴다
 @app.get("/models")
 def models():
-    import importlib.util
-    from Process import inpaint_lama as L
-    #inpaint_flux 는 torch·diffusers 를 함수 안에서 늦게 import 하므로 모듈 import 성공으로는 판단이 안 된다 → 패키지 존재로 판정
-    flux_available = all(importlib.util.find_spec(m) is not None for m in ("torch", "diffusers"))
-    flux = False
-    if flux_available:
-        from Process import inpaint_flux as F
-        flux = F._flux2 is not None
-    return {"lama": L._lama is not None, "flux": flux, "flux_available": flux_available}
+    from Process import inpaint
+    return {"lama": inpaint._lama is not None, "flux": False, "flux_available": False}   # FLUX 는 주석 처리됨 (Process/inpaint.py)
 
 
 #렌더용 폰트: koharu 내장 Google Fonts 중 한글 되는 것. 파일은 /fontfiles/<상대경로> 로 그대로 내보낸다
@@ -114,8 +104,8 @@ def fonts():
     return list_korean_fonts() if os.path.isdir(FONTS_DIR) else []
 
 
-#프로젝트 저장 (코하루식 디스크 저장): /projects/... — Process/projects.py
-from Process.projects import router as projects_router
+#프로젝트 저장 (코하루식 디스크 저장): /projects/... — projects.py
+from projects import router as projects_router
 app.include_router(projects_router)
 
 

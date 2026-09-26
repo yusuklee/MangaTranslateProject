@@ -35,7 +35,7 @@ def main():
     shutil.copy2(fetch(PIP_URL, os.path.join(CACHE, "pip.pyz")), os.path.join(APP, "pip.pyz"))
 
     # 2) 앱 코드와 리소스
-    for f in ["launch.py", "backend.py", "requirements.txt", "comictextdetector.pt.onnx", "anime-manga-big-lama.pt"]:
+    for f in ["launch.py", "backend.py", "projects.py", "requirements.txt", "comictextdetector.pt.onnx", "anime-manga-big-lama.pt"]:
         shutil.copy2(os.path.join(ROOT, f), os.path.join(APP, f))
     shutil.copytree(os.path.join(ROOT, "Process"), os.path.join(APP, "Process"), ignore=shutil.ignore_patterns("__pycache__"))
     shutil.copytree(os.path.join(ROOT, "frontend", "dist"), os.path.join(APP, "frontend", "dist"))
