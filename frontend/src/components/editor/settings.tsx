@@ -11,8 +11,61 @@ type Lang = string; //Gemini 에 그대로 넘기는 영어 언어명
 //calls: 번역 API 호출 횟수. "auto" = 30페이지당 1번 (150페이지면 5번), 숫자 = 그 횟수로 문장을 나눠 보냄
 //apiKey: 사용자의 Gemini 키. 브라우저 localStorage 에만 저장되고 요청 헤더로 백엔드에 전달된다 (비어 있으면 서버 .env 키)
 //onomatopoeia: 의성어(효과음) 상자도 글자로 잡아 번역할지. RF-DETR 가 text 와 onomatopoeia 를 같이 뽑으니 포함 여부만 고른다
-export type AppSettings = { source: Lang; target: Lang; inpaintModel: InpaintModel; model: string; calls: "auto" | number; apiKey: string; onomatopoeia: boolean };
-export const DEFAULT_SETTINGS: AppSettings = { source: "Japanese", target: "Korean", inpaintModel: "inpaint_lama", model: "gemini-3.6-flash", calls: "auto", apiKey: "", onomatopoeia: false };
+//provider: 번역 API. model·apiKey 는 Gemini, gptModel·gptKey 는 ChatGPT, claudeModel·claudeKey 는 Claude,
+//openaiUrl·openaiModel·openaiKey 는 사용자가 직접 등록하는 OpenAI 방식 API (Ollama·LM Studio, Cohere, DeepSeek 등),
+//localModel 은 앱이 직접 받아 이 PC 에서 돌리는 모델 (백엔드 Process/local_llm.py)
+//키들은 설정과 따로 localStorage 에 저장한다
+export type Provider = "gemini" | "chatgpt" | "claude" | "openai" | "local";
+export type AppSettings = {
+  source: Lang; target: Lang; inpaintModel: InpaintModel; calls: "auto" | number; onomatopoeia: boolean;
+  provider: Provider; model: string; gptModel: string; claudeModel: string; openaiUrl: string; openaiModel: string; localModel: string;
+  apiKey: string; gptKey: string; claudeKey: string; openaiKey: string;
+};
+
+//Gemini 는 Gemini SDK 로 (503 이면 대체 모델). ChatGPT·Claude·OpenAI·Local 은 OpenAI 방식(/chat/completions) 으로 보낸다
+export const PROVIDERS: Record<Provider, { label: string; url: string; models: string[]; keyUrl: string }> = {
+  gemini: { label: "Gemini", url: "", models: ["gemini-3.5-flash", "gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.8-flash", "gemini-3.5-flash-lite"], keyUrl: "https://aistudio.google.com/apikey" },
+  chatgpt: { label: "ChatGPT", url: "https://api.openai.com/v1", models: ["gpt-6-luna", "gpt-6-sol", "gpt-6-astra"], keyUrl: "https://platform.openai.com/api-keys" },
+  claude: { label: "Claude", url: "https://api.anthropic.com/v1", models: ["claude-haiku-4-5-20251001", "claude-sonnet-5", "claude-opus-5-5", "claude-fable-5-1"], keyUrl: "https://platform.claude.com/settings/keys" },
+  openai: { label: "OpenAI", url: "", models: [], keyUrl: "" },
+  local: { label: "Local", url: "", models: [], keyUrl: "" },
+};
+//provider 별로 쓰는 설정 칸
+const FIELDS = {
+  gemini: { model: "model", key: "apiKey" },
+  chatgpt: { model: "gptModel", key: "gptKey" },
+  claude: { model: "claudeModel", key: "claudeKey" },
+} as const;
+
+//Local 모델 (코하루에 있던 것). 처음 번역할 때 백엔드가 받는다. id 는 백엔드 local_llm.MODELS 와 같아야 한다
+export const LOCAL_MODELS: { id: string; name: string; size: string }[] = [
+  { id: "qwen3.5-9b", name: "Qwen 3.5 9B", size: "5.7 GB" },
+  { id: "qwen3.5-9b-uncensored", name: "Qwen 3.5 9B Uncensored", size: "5.6 GB" },
+  { id: "qwen3.6-27b-uncensored", name: "Qwen 3.6 27B Uncensored", size: "15 GB" },
+  { id: "qwen3.6-35b-a3b-uncensored", name: "Qwen 3.6 35B A3B Uncensored", size: "23 GB" },
+  { id: "vntl-llama3-8b", name: "VNTL Llama 3 8B v2", size: "5.7 GB" },
+  { id: "gemma4-e2b-it", name: "Gemma 4 E2B Instruct", size: "2.6 GB" },
+  { id: "gemma4-e4b-it", name: "Gemma 4 E4B Instruct", size: "4.2 GB" },
+  { id: "gemma4-12b-it", name: "Gemma 4 12B Instruct", size: "6.7 GB" },
+  { id: "gemma4-26b-a4b-it", name: "Gemma 4 26B A4B Instruct", size: "14 GB" },
+  { id: "gemma4-31b-it", name: "Gemma 4 31B Instruct", size: "17 GB" },
+];
+
+export const DEFAULT_SETTINGS: AppSettings = {
+  source: "Japanese", target: "Korean", inpaintModel: "inpaint_lama", calls: "auto", onomatopoeia: false,
+  provider: "gemini", model: "gemini-3.6-flash", gptModel: "gpt-6-luna", claudeModel: "claude-haiku-4-5-20251001", openaiUrl: "", openaiModel: "", localModel: "gemma4-12b-it",
+  apiKey: "", gptKey: "", claudeKey: "", openaiKey: "",
+};
+
+//번역 요청에 넣을 모델·주소·키 헤더. local 이면 백엔드가 띄운 llama-server, baseUrl 도 local 도 없으면 Gemini
+export const translateTarget = (s: AppSettings): { model: string; baseUrl?: string; local?: boolean; headers: Record<string, string> } => {
+  const key = (k: string, h = "X-Api-Key"): Record<string, string> => (k ? { [h]: k } : {});
+  if (s.provider === "chatgpt") return { model: s.gptModel, baseUrl: PROVIDERS.chatgpt.url, headers: key(s.gptKey) };
+  if (s.provider === "claude") return { model: s.claudeModel, baseUrl: PROVIDERS.claude.url, headers: key(s.claudeKey) };
+  if (s.provider === "openai") return { model: s.openaiModel, baseUrl: s.openaiUrl, headers: key(s.openaiKey) };
+  if (s.provider === "local") return { model: s.localModel, local: true, headers: {} };
+  return { model: s.model, headers: key(s.apiKey, "X-Gemini-Key") };
+};
 export const PAGES_PER_CALL = 20;
 const CALL_PRESETS = ["auto", 1, 2, 5] as const;
 
@@ -23,14 +76,14 @@ export const loadSettings = (): Partial<AppSettings> & { fontFamily?: string } =
 };
 export const saveSettings = (s: AppSettings, fontFamily: string) => {
   try {
-    const { apiKey: _k, ...rest } = s;
+    const { apiKey: _k, gptKey: _g, claudeKey: _c, openaiKey: _o, ...rest } = s;
     localStorage.setItem(SETTINGS_STORAGE, JSON.stringify({ ...rest, fontFamily }));
   } catch { /* 저장 못 해도 동작엔 지장 없음 */ }
 };
 
-const KEY_STORAGE = "gemini_api_key";
-export const loadApiKey = () => { try { return localStorage.getItem(KEY_STORAGE) ?? ""; } catch { return ""; } };
-const saveApiKey = (k: string) => { try { k ? localStorage.setItem(KEY_STORAGE, k) : localStorage.removeItem(KEY_STORAGE); } catch { /* 저장 못 해도 동작엔 지장 없음 */ } };
+//키 저장 이름: gemini_api_key, chatgpt_api_key, claude_api_key, openai_api_key
+export const loadKey = (p: Provider) => { try { return localStorage.getItem(`${p}_api_key`) ?? ""; } catch { return ""; } };
+const saveKey = (p: Provider, k: string) => { try { k ? localStorage.setItem(`${p}_api_key`, k) : localStorage.removeItem(`${p}_api_key`); } catch { /* 저장 못 해도 동작엔 지장 없음 */ } };
 
 //OK 버튼: 키를 백엔드로 보내 .env 에 저장 (앱을 껐다 켜도 서버가 이 키를 쓴다)
 const postApiKey = async (k: string) => {
@@ -95,7 +148,26 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-const GEMINI_MODELS = ["gemini-3.5-flash", "gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.8-flash", "gemini-3.5-flash-lite"];
+//API 키 입력칸 + Show/Hide
+function KeyInput({ value, placeholder, onChange }: { value: string; placeholder: string; onChange: (k: string) => void }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="flex items-center gap-1">
+      <input
+        className={`${selectCls} w-64 min-w-0 font-mono`}
+        type={show ? "text" : "password"}
+        placeholder={placeholder}
+        autoComplete="off"
+        spellCheck={false}
+        value={value}
+        onChange={(e) => onChange(e.target.value.trim())}
+      />
+      <button className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border hover:bg-muted" onClick={() => setShow(!show)} title={show ? "Hide" : "Show"}>
+        <EyeIcon off={show} />
+      </button>
+    </div>
+  );
+}
 
 export const SettingsDialog = memo(function SettingsDialog({
   open,
@@ -119,7 +191,6 @@ export const SettingsDialog = memo(function SettingsDialog({
   const [tab, setTab] = useState<Tab>("language");
   const [customCalls, setCustomCalls] = useState(typeof settings.calls === "number" && !CALL_PRESETS.includes(settings.calls as never));
   const [customStr, setCustomStr] = useState(typeof settings.calls === "number" ? String(settings.calls) : "3");
-  const [showKey, setShowKey] = useState(false);
 
   //Esc 로 닫기
   useEffect(() => {
@@ -210,28 +281,60 @@ export const SettingsDialog = memo(function SettingsDialog({
                   </select>
                 </Section>
                 <Section title="Translation model">
-                  <select className={`${selectCls} w-64`} value={settings.model} onChange={(e) => set({ model: e.target.value })}>
-                    {GEMINI_MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
-                  </select>
-                  <p className="mb-1 mt-3 text-[11px] font-medium text-muted-foreground">API key</p>
-                  <div className="flex items-center gap-1">
-                    <input
-                      className={`${selectCls} w-64 min-w-0 font-mono`}
-                      type={showKey ? "text" : "password"}
-                      placeholder="AIza..."
-                      autoComplete="off"
-                      spellCheck={false}
-                      value={settings.apiKey}
-                      onChange={(e) => { const k = e.target.value.trim(); saveApiKey(k); set({ apiKey: k }); }}
-                    />
-                    <button className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border hover:bg-muted" onClick={() => setShowKey(!showKey)} title={showKey ? "Hide" : "Show"}>
-                      <EyeIcon off={showKey} />
-                    </button>
-                  </div>
-                  <p className="mt-1.5 text-[11px] text-muted-foreground">
-                    Stored only in this browser, sent to your local backend. Empty = server default key. Get one at{" "}
-                    <a className="underline" href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">aistudio.google.com/apikey</a>
-                  </p>
+                  <Row label="Provider">
+                    <select className={`${selectCls} w-64`} value={settings.provider} onChange={(e) => set({ provider: e.target.value as Provider })}>
+                      {(Object.keys(PROVIDERS) as Provider[]).map((p) => <option key={p} value={p}>{PROVIDERS[p].label}</option>)}
+                    </select>
+                  </Row>
+                  {settings.provider === "local" ? (
+                    <>
+                      <Row label="Model">
+                        <select className={`${selectCls} w-64`} value={settings.localModel} onChange={(e) => set({ localModel: e.target.value })}>
+                          {LOCAL_MODELS.map((m) => <option key={m.id} value={m.id}>{m.name}{m.size && ` (${m.size})`}</option>)}
+                        </select>
+                      </Row>
+                      <p className="mt-1.5 text-[11px] text-muted-foreground">
+                        Runs on this PC's GPU with llama.cpp. The model is downloaded the first time you translate (several GB) and kept in the app folder.
+                      </p>
+                    </>
+                  ) : settings.provider === "openai" ? (
+                    <>
+                      <Row label="Base URL">
+                        <input className={`${selectCls} w-64 min-w-0 font-mono`} placeholder="http://localhost:11434/v1" spellCheck={false} value={settings.openaiUrl} onChange={(e) => set({ openaiUrl: e.target.value.trim() })} />
+                      </Row>
+                      <Row label="Model">
+                        <input className={`${selectCls} w-64 min-w-0 font-mono`} placeholder="e.g. qwen3:8b" spellCheck={false} value={settings.openaiModel} onChange={(e) => set({ openaiModel: e.target.value.trim() })} />
+                      </Row>
+                      <p className="mb-1 mt-3 text-[11px] font-medium text-muted-foreground">API key</p>
+                      <KeyInput value={settings.openaiKey} placeholder="optional" onChange={(k) => { saveKey("openai", k); set({ openaiKey: k }); }} />
+                      <p className="mt-1.5 text-[11px] text-muted-foreground">
+                        Any OpenAI-compatible /chat/completions API: a server on this PC (Ollama, LM Studio, llama.cpp) or a cloud API. Leave the key empty if not needed.
+                      </p>
+                    </>
+                  ) : (() => {
+                    const p = settings.provider;
+                    const f = FIELDS[p];
+                    return (
+                      <>
+                        {PROVIDERS[p].url && (
+                          <Row label="Base URL">
+                            <input className={`${selectCls} w-64 min-w-0 font-mono opacity-60`} value={PROVIDERS[p].url} readOnly />
+                          </Row>
+                        )}
+                        <Row label="Model">
+                          <select className={`${selectCls} w-64`} value={settings[f.model]} onChange={(e) => set({ [f.model]: e.target.value })}>
+                            {PROVIDERS[p].models.map((m) => <option key={m} value={m}>{m}</option>)}
+                          </select>
+                        </Row>
+                        <p className="mb-1 mt-3 text-[11px] font-medium text-muted-foreground">API key</p>
+                        <KeyInput value={settings[f.key]} placeholder={p === "gemini" ? "AIza..." : "sk-..."} onChange={(k) => { saveKey(p, k); set({ [f.key]: k }); }} />
+                        <p className="mt-1.5 text-[11px] text-muted-foreground">
+                          Stored only in this browser, sent to your local backend.{p === "gemini" && " Empty = server default key."} Get one at{" "}
+                          <a className="underline" href={PROVIDERS[p].keyUrl} target="_blank" rel="noreferrer">{PROVIDERS[p].keyUrl.replace("https://", "")}</a>
+                        </p>
+                      </>
+                    );
+                  })()}
                   <Row label="API calls">
                     <select
                       className={selectCls}

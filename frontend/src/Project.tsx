@@ -2,7 +2,7 @@ import { Group, Panel, Separator } from "react-resizable-panels";
 import { Button } from "@/components/ui/button";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Text } from "./components/editor/text";
-import { SettingsDialog, DEFAULT_SETTINGS, PAGES_PER_CALL, loadApiKey, loadSettings, saveSettings, type AppSettings } from "./components/editor/settings";
+import { SettingsDialog, DEFAULT_SETTINGS, PAGES_PER_CALL, loadKey, loadSettings, saveSettings, translateTarget, PROVIDERS, LOCAL_MODELS, type AppSettings } from "./components/editor/settings";
 import { SplitButton } from "./components/editor/splitbutton";
 import { PageList } from "./components/editor/pagelist";
 import { RepeatButton } from "./components/editor/repeatbutton";
@@ -169,21 +169,25 @@ export function Project({
   //설정 (⚙ 버튼으로 여는 창): 원본→번역 언어, 인페인팅 모델
   const [settings, setSettings] = useState<AppSettings>(() => {
     const { fontFamily: _f, ...saved } = loadSettings();
-    return { ...DEFAULT_SETTINGS, ...saved, apiKey: loadApiKey() };
+    //예전 버전에서 저장된 값이 지금 목록에 없으면 기본값으로
+    const provider = saved.provider && saved.provider in PROVIDERS ? saved.provider : "gemini";
+    const localModel = LOCAL_MODELS.some((m) => m.id === saved.localModel) ? saved.localModel! : DEFAULT_SETTINGS.localModel;
+    return { ...DEFAULT_SETTINGS, ...saved, provider, localModel, apiKey: loadKey("gemini"), gptKey: loadKey("chatgpt"), claudeKey: loadKey("claude"), openaiKey: loadKey("openai") };
   });
-  const keyHeader = (): Record<string, string> => (settings.apiKey ? { "X-Gemini-Key": settings.apiKey } : {});
+  const target = translateTarget(settings);
+  const modelName = target.model || settings.provider;
   const [settingsOpen, setSettingsOpen] = useState(false);
   const inpaintModel = settings.inpaintModel;
   //번역 요청: 문장 목록 + 언어 방향 + 모델
   //응답이 3분 넘게 없으면 끊고 "No response" 로 알린다
   const translate = async (lines: { id: number; word: string }[]) => {
     const ctl = new AbortController();
-    const timer = window.setTimeout(() => ctl.abort(), 180_000);
+    const timer = window.setTimeout(() => ctl.abort(), target.local ? 900_000 : 180_000); //Local 은 느리다
     try {
       const r = await fetch(`${API}/translate`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...keyHeader() },
-        body: JSON.stringify({ lines, source: settings.source, target: settings.target, model: settings.model }),
+        headers: { "Content-Type": "application/json", ...target.headers },
+        body: JSON.stringify({ lines, source: settings.source, target: settings.target, model: target.model, ...(target.baseUrl !== undefined ? { base_url: target.baseUrl } : {}), ...(target.local ? { local: true } : {}) }),
         signal: ctl.signal,
       });
       return await okJson(r);
@@ -299,8 +303,24 @@ const handle_detect = async (page=selectedPage!)=>{
 
 //선택한 여러 페이지 번역 (TRANSLATE 단계). 줄을 모아 handle_all 처럼 settings.calls 번으로 나눠 동시에 보낸다
 //호출이 하나 올 때마다 TRANSLATE k/n 과 하단 막대의 그 칸을 갱신. DETECT 안 한 페이지는 건너뜀
+//Local 번역이면 번역 전에 백엔드가 llama.cpp·모델을 받고 띄울 때까지 기다린다 (처음 한 번만 오래 걸림)
+const prepareLocal = async () => {
+    if (!target.local) return;
+    const post = { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: target.model }) };
+    let s: { state: string; text: string; done: number; total: number } = await fetch(`${API}/local_llm/prepare`, post).then(okJson);
+    while (s.state !== "ready") {
+      if (s.state === "error") throw new Error(`Local model: ${s.text}`);
+      setProgress(s.state === "downloading"
+        ? `Downloading ${s.text} ${s.total ? Math.floor((s.done * 100) / s.total) : 0}% (first time only)`
+        : `Loading local model ${s.text}...`);
+      await new Promise((r) => setTimeout(r, 1000));
+      s = await fetch(`${API}/local_llm/status`).then(okJson);
+    }
+};
+
 const handle_translate_pages = async (targets: string[]) => {
     const gid = (pageIndex: number, id: number) => pageIndex * 10000 + id;
+    await prepareLocal();
     const detected = targets.filter((page) => pageContents[page]);
     const lines = detected.flatMap((page, pi) => pageContents[page].map((c) => ({ id: gid(pi, c.id), word: c.word })));
 
@@ -312,14 +332,14 @@ const handle_translate_pages = async (targets: string[]) => {
     let arrived = 0;
     let failed = false; //하나가 실패하면 뒤늦게 온 응답이 에러 문구를 덮지 않게
     setCallBar(parts.map(() => false));
-    setProgress(`TRANSLATE 0/${parts.length} (${settings.model})`);
+    setProgress(`TRANSLATE 0/${parts.length} (${modelName})`);
     let translations: Record<string, string>;
     try {
       const res = await Promise.all(parts.map((part, k) => translate(part).then((r) => {
         if (!failed) {
           arrived++;
           setCallBar((bar) => bar && bar.map((v, j) => v || j === k));
-          setProgress(`TRANSLATE ${arrived}/${parts.length} (${settings.model})`);
+          setProgress(`TRANSLATE ${arrived}/${parts.length} (${modelName})`);
         }
         return r;
       })));
@@ -351,27 +371,30 @@ const handle_inpaint=async(inpaint_model:string=inpaintModel,page=selectedPage!,
     })
     void saveErased(page, image); //기다리지 않음
 }
-  //파이프라인: 1) 대상 페이지 전부 DETECT  2) 글자를 반으로 갈라 번역 2번 동시 요청 (기다리지 않음)
-  //3) 그동안 INPAINT (설정의 모델)  4) 번역 도착하면 배분·렌더.  PROCESS = 선택한 페이지들, PROCESS_ALL = 전체
+  //파이프라인: 1) DETECT 하다가 한 묶음(auto = 20페이지, N회 = 전체/N 페이지)이 모이면 바로 번역 요청 보내고 기다리지 않고 다음 DETECT
+  //2) 다 DETECT 하면 INPAINT  3) 번역이 다 오면 배분·렌더.  PROCESS = 선택한 페이지들, PROCESS_ALL = 전체
   const handle_all = async (targets:string[]=pages)=>{
     const gid = (pageIndex:number, id:number)=> pageIndex*10000+id;
+    await prepareLocal();
+    const per = settings.calls === "auto" ? PAGES_PER_CALL : Math.ceil(targets.length / settings.calls);
 
     const detected:PageContents={};
+    const requests:Promise<Record<string,string>>[] = [];
+    let start = 0; //아직 번역 요청 안 보낸 첫 페이지
+    const send = (end:number) => {
+        const lines = targets.slice(start, end).flatMap((page, k) => detected[page].map((c) => ({ id: gid(start + k, c.id), word: c.word })));
+        start = end;
+        if (!lines.length) return;
+        const req = translate(lines);
+        req.catch(()=>{});
+        requests.push(req);
+    };
     for (const [page_num ,page ] of targets.entries()){
         setProgress(`DETECT ${page_num+1}/${targets.length}`);
         detected[page]=await handle_detect(page);
+        if (page_num + 1 - start >= per || page_num + 1 === targets.length) send(page_num + 1);
     }
-    const lines = targets.flatMap((page,pi) => {
-        return detected[page].map((c)=> {return {id:gid(pi,c.id), word:c.word}})
-    })
-
-    //호출 횟수: 설정값. auto 면 30페이지당 1번. 문장 수보다 많이 나눌 순 없다
-    const wanted = settings.calls === "auto" ? Math.ceil(targets.length / PAGES_PER_CALL) : settings.calls;
-    const calls = Math.max(1, Math.min(wanted, lines.length));
-    const size = Math.ceil(lines.length / calls);
-    const parts = Array.from({ length: calls }, (_, k) => lines.slice(k * size, (k + 1) * size)).filter((p) => p.length);
-    setProgress(`TRANSLATE ${parts.length} call${parts.length > 1 ? "s" : ""} (${settings.model}) · inpainting meanwhile`);
-    const translating = Promise.all(parts.map((part)=>translate(part)))
+    const translating = Promise.all(requests)
       .then((res)=>Object.assign({},...res)as Record<string,string>);
     translating.catch(()=>{});
 

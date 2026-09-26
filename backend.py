@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image
 import io, os, json
 from Process.detect_ocr import detect_ocr_page
-from Process.translate import translate_lines
+from Process.translate import translate_lines, local_prepare, local_status
 from Process.inpaint import inpaint_white, inpaint_lama
 from fonts.fonts import list_korean_fonts, FONTS_DIR
 from google.genai import errors as genai_errors
@@ -30,14 +30,36 @@ async def detect(file: UploadFile, classes: str = Form("text")):
 
 
 
+#local 이면 이 PC 의 llama-server. base_url 이 있으면 ChatGPT·Claude·OpenAI(사용자 등록), 키는 X-Api-Key 헤더
+#둘 다 없으면 Gemini, 키는 X-Gemini-Key
 @app.post("/translate")
-def translate(body: dict, x_gemini_key: str | None = Header(default=None)):
+def translate(body: dict, x_gemini_key: str | None = Header(default=None), x_api_key: str | None = Header(default=None)):
+    local = bool(body.get("local"))
+    base_url = body.get("base_url")
+    if base_url is not None and not base_url.strip():
+        raise HTTPException(400, "OpenAI: enter the Base URL in Settings")
     try:
-        return translate_lines(body["lines"], body.get("source", "Japanese"), body.get("target", "Korean"), body.get("model") or None, x_gemini_key)
+        return translate_lines(body["lines"], body.get("source", "Japanese"), body.get("target", "Korean"), body.get("model") or None,
+                               x_api_key if base_url else x_gemini_key, base_url, local)
+    except (ValueError, RuntimeError) as e:   # RuntimeError: llama-server 가 안 뜸
+        raise HTTPException(400, str(e))
+    except genai_errors.APIError as e:   # 키가 틀리거나(400/403) 한도(429) 등 API 쪽 오류 → 그 코드와 메시지를 그대로
+        raise HTTPException(e.code if 400 <= (e.code or 0) < 600 else 502, f"{'API' if base_url or local else 'Gemini'}: {e.message}")
+
+
+#Local 번역 준비: 프런트가 TRANSLATE·PROCESS 전에 부르고, status 를 보며 "받는 중 n%" 를 띄운다
+@app.post("/local_llm/prepare")
+def local_llm_prepare(body: dict):
+    try:
+        local_prepare(body["model"])
     except ValueError as e:
         raise HTTPException(400, str(e))
-    except genai_errors.APIError as e:   # 키가 틀리거나(400/403) 한도(429) 등 Gemini 쪽 오류 → 그 코드와 메시지를 그대로
-        raise HTTPException(e.code if 400 <= (e.code or 0) < 600 else 502, f"Gemini: {e.message}")
+    return local_status
+
+
+@app.get("/local_llm/status")
+def local_llm_status():
+    return local_status
 
 
 #글자 자리만 흰색으로 (모델 없음)
