@@ -59,14 +59,14 @@ export const DEFAULT_SETTINGS: AppSettings = {
 
 //번역 요청에 넣을 모델·주소·키 헤더. local 이면 백엔드가 띄운 llama-server, baseUrl 도 local 도 없으면 Gemini
 export const translateTarget = (s: AppSettings): { model: string; baseUrl?: string; local?: boolean; headers: Record<string, string> } => {
-  const key = (k: string, h = "X-Api-Key"): Record<string, string> => (k ? { [h]: k } : {});
+  const key = (k: string): Record<string, string> => (k ? { "X-Api-Key": k } : {});
   if (s.provider === "chatgpt") return { model: s.gptModel, baseUrl: PROVIDERS.chatgpt.url, headers: key(s.gptKey) };
   if (s.provider === "claude") return { model: s.claudeModel, baseUrl: PROVIDERS.claude.url, headers: key(s.claudeKey) };
   if (s.provider === "openai") return { model: s.openaiModel, baseUrl: s.openaiUrl, headers: key(s.openaiKey) };
   if (s.provider === "local") return { model: s.localModel, local: true, headers: {} };
-  return { model: s.model, headers: key(s.apiKey, "X-Gemini-Key") };
+  return { model: s.model, headers: key(s.apiKey) };
 };
-export const PAGES_PER_CALL = 20;
+export const PAGES_PER_CALL = 30;
 const CALL_PRESETS = ["auto", 1, 2, 5] as const;
 
 //설정은 브라우저 localStorage 에 남긴다 (앱을 껐다 켜도 유지). API 키는 따로 저장

@@ -57,71 +57,25 @@ def parse_translations(text):
             out[r["id"]] = r["text"]
 
 
+#clients.models.generate_content(model="", contents=,config)
 #사용자 키(설정 창) 우선, 없으면 .env 의 GEMINI_API_KEY. 키마다 클라이언트를 하나씩 만들어 재사용
 _clients = {}
 def get_client(api_key=None):
     key = (api_key or os.environ.get("GEMINI_API_KEY") or "").strip()
     if not key:
-        raise ValueError("Gemini API key is required. Enter it in Settings → API key.")
+        raise ValueError("Gemini API key is required. Enter it in Settings -> API key.")
     if key not in _clients:
-        _clients[key] = genai.Client(api_key=key)
+        _clients[key] = genai.Client(api_key=key, http_options=types.HttpOptions(
+            retry_options=types.HttpRetryOptions(attempts=5,http_status_codes=[408,500,502,503,504])
+        ))
     return _clients[key]
 
 
 JAPANESE = re.compile(r"[ぁ-んァ-ヶ一-龯]")   # 가나·한자가 번역문에 남았는지 검사용
 
 #설정 창에 보여줄 모델 목록: API 에서 받아 텍스트 모델만 남긴다 (image/tts/transcribe 등 제외). 한 번 받으면 캐시
-MODEL = os.environ.get("TRANSLATE_MODEL", "gemini-3.6-flash")          # 바로 번역, 검토 없음
-THINKING = None                                                         # None = 모델 기본 생각 수준(보통). "minimal" 은 빨랐지만 번역이 거칠고, 지원 안 하는 모델도 있다
+MODEL = os.environ.get("TRANSLATE_MODEL", "gemini-3.6-flash")          # 바로 번역, 검토 없음                                                     # None = 모델 기본 생각 수준(보통). "minimal" 은 빨랐지만 번역이 거칠고, 지원 안 하는 모델도 있다
 FALLBACK_MODELS = ["gemini-3.5-flash", "gemini-3.5-flash-lite"]        # 503(과부하)·429(일일 한도)면 순서대로 대체
-
-
-#503이면 2·4·8초 쉬고 재시도, 429(한도 초과)면 바로 다음 모델. 전부 실패하면 마지막 에러를 던진다
-def ask(model, system, payload, retries=1, thinking=THINKING, api_key=None):   # 5xx 는 1번만 더 해 보고(2초 뒤) 다음 모델로. 3번 재시도는 대체까지 37초 걸렸다
-    client = get_client(api_key)
-    candidates = [model] + [m for m in FALLBACK_MODELS if m != model]
-    last = None
-    n = len(payload.get("segments", []))
-    t0 = time.time()
-    for m in candidates:
-        for attempt in range(retries + 1):
-            try:
-                t = time.time()
-                resp = client.models.generate_content(
-                    model=m,
-                    contents=json.dumps(payload, ensure_ascii=False),
-                    config=types.GenerateContentConfig(
-                        system_instruction=system,
-                        response_mime_type="application/json",
-                        response_schema=SCHEMA,
-                        thinking_config=types.ThinkingConfig(thinking_level=thinking) if thinking else None,
-                    ),
-                )
-                u = resp.usage_metadata
-                print(f"[translate] {m} {n}문장 {time.time()-t:.1f}s (총 {time.time()-t0:.1f}s, 시도 {attempt+1}"
-                      f"{', 대체' if m != model else ''}) 생각={getattr(u, 'thoughts_token_count', None)} 출력={u.candidates_token_count}", flush=True)
-                return parse_translations(resp.text)
-            except errors.APIError as e:
-                last = e
-                print(f"[translate] {m} {e.code} (시도 {attempt+1}, {time.time()-t:.1f}s)", flush=True)
-                if e.code == 429:          # 이 모델 오늘 한도 끝 → 기다려봤자 소용없으니 다음 모델로
-                    break
-                if e.code == 400 and thinking and "thinking" in str(e.message).lower():   # 이 모델이 그 생각 수준을 안 받음 → 기본값으로 다시
-                    thinking = None
-                    continue
-                if e.code < 500:           # 그 외 4xx는 우리 요청 문제 → 그대로 에러
-                    raise
-                if attempt < retries:
-                    time.sleep(2 ** (attempt + 1))
-    #전부 실패: 429 면 어떤 모델들을 시도했는지 붙여서 알려준다 (프런트가 사용자에게 보여줌)
-    if isinstance(last, errors.APIError) and last.code == 429:
-        raise errors.APIError(429, {"error": {"message": f"quota exceeded for {', '.join(candidates)}", "status": "RESOURCE_EXHAUSTED"}})
-    raise last
-
-
-
-#여러 모델들로 번역
-
 
 #JSON 이 깨져 오면 (작은 모델) {"id": N, "text": "..."} 조각만 골라 읽는다
 PAIR = re.compile(r'\{\s*"id"\s*:\s*(\d+)\s*,\s*"text"\s*:\s*("(?:[^"\\]|\\.)*")')
@@ -137,26 +91,74 @@ JSON_SCHEMA = {"type": "object", "required": ["translations"], "properties": {"t
     "type": "object", "required": ["id", "text"], "properties": {"id": {"type": "integer"}, "text": {"type": "string"}}}}}}
 
 
-#ChatGPT·Claude·OpenAI(사용자 등록)·Local = OpenAI 방식(/chat/completions) API. 대체 모델 없이 1번만. model 이 비면 안 보낸다
-#JSON 형식 강제는 곳마다 지원이 달라 Local(llama-server) 에만 쓴다. Local 은 느려서 기다리는 시간도 길게
-def ask_openai(base_url, model, system, payload, api_key=None, local=False):
-    t = time.time()
-    try:
-        r = requests.post(
-            base_url.rstrip("/") + "/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}"} if api_key else {},
-            json={**({"model": model} if model else {}),
-                  **({"response_format": {"type": "json_schema", "json_schema": {"name": "translations", "schema": JSON_SCHEMA}}} if local else {}),
-                  "messages": [{"role": "system", "content": system}, {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]},
-            timeout=880 if local else 170,
-        )
-    except requests.RequestException as e:
-        raise errors.APIError(502, {"error": {"message": f"cannot reach {base_url}: {e}"}})
-    if not r.ok:
-        raise errors.APIError(r.status_code, {"error": {"message": r.text[:300]}})
-    text = r.json()["choices"][0]["message"]["content"] or ""
-    print(f"[translate] {model} {len(payload['segments'])}문장 {time.time()-t:.1f}s ({base_url})", flush=True)
-    return parse_loose(text)
+
+
+
+def ask(base_url, model, system, payload, api_key=None, local=False, thinking = None): #req 보내고 응답받기
+
+
+    start=time.time()
+    if not base_url:     #when gen api
+        client = get_client(api_key)
+        candidates = [model] + [m for m in FALLBACK_MODELS if m != model]
+        last = None
+        n = len(payload.get("segments", []))
+        for m in candidates:
+            try:
+
+                resp = client.models.generate_content(
+                    model=m,
+                    contents=json.dumps(payload, ensure_ascii=False),
+                    config=types.GenerateContentConfig(
+                        system_instruction=system,
+                        response_mime_type="application/json",
+                        response_schema=SCHEMA,
+                        thinking_config=types.ThinkingConfig(thinking_level=thinking) if thinking else None,
+                    ),
+                )
+
+                print(f"{m} model 로 대체 되었습니다. " if m!=model else f"{m} 정상 작동")
+                return parse_translations(resp.text)
+
+            except errors.APIError as e:
+                last = e
+
+                print(f"{m} model 에러 발생", flush=True)
+                if e.code == 429:
+                    break
+                if e.code == 400 and thinking and "thinking" in str(
+                    e.message).lower():  # 이 모델이 그 생각 수준을 안 받음 → 기본값으로 다시
+                    thinking = None
+                    continue
+                if e.code < 500:  # 그 외 4xx는 우리 요청 문제 → 그대로 에러
+                    raise
+
+
+        if isinstance(last, errors.APIError) and last.code == 429:
+            raise errors.APIError(429, {
+                "error": {"message": f"quota exceeded for {', '.join(candidates)}", "status": "RESOURCE_EXHAUSTED"}})
+        raise last
+
+    else:   #others
+        try:
+            r = requests.post(
+                base_url.rstrip("/") + "/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}"} if api_key else {},
+                json={**({"model": model} if model else {}),
+                      **({"response_format": {"type": "json_schema", "json_schema": {"name": "translations",
+                                                                                     "schema": JSON_SCHEMA}}} if local else {}),
+                      "messages": [{"role": "system", "content": system},
+                                   {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]},
+                timeout=880 if local else 170,
+            )
+        except requests.RequestException as e:
+            raise errors.APIError(502, {"error": {"message": f"cannot reach {base_url}: {e}"}})
+        if not r.ok:
+            raise errors.APIError(r.status_code, {"error": {"message": r.text[:300]}})
+        text = r.json()["choices"][0]["message"]["content"] or ""
+        print(f"[translate] {model} {len(payload['segments'])}문장 {time.time() - start:.1f}s ({base_url})", flush=True)
+        return parse_loose(text)
+
 
 
 
@@ -281,7 +283,7 @@ def local_prepare(model_id):
     threading.Thread(target=lambda: local_ensure(model_id), daemon=True).start()
 
 
-def request_translations(lines, source="Japanese", target="Korean", model=None, api_key=None, base_url=None, local=False):
+def req(lines, source="Japanese", target="Korean", model=None, api_key=None, base_url=None, local=False):
     payload = {
         "source_language": source,
         "target_language": target,
@@ -289,20 +291,20 @@ def request_translations(lines, source="Japanese", target="Korean", model=None, 
         "segments": [{"id": t["id"], "text": t["word"]} for t in lines],
     }
     system = PROMPT.format(source=source, target=target)
-    if local:
-        return ask_openai(local_ensure(model), model, system, payload, local=True)
-    if base_url:
-        return ask_openai(base_url, model, system, payload, api_key)
-    return ask(model or MODEL, system, payload, api_key=api_key)
+    if local:  # local
+        return ask(local_ensure(model), model, system, payload, local=True)
+    if base_url:       #제미나이외에 다른 open ai gpt, 클로드 등등
+        return ask(base_url, model, system, payload, api_key=api_key)
+    #제미나이
+    return ask(None,model or MODEL, system, payload, api_key=api_key)
 
 
-#번역 1번. 재요청 없음 — 모델이 빼먹은 문장은 원문 그대로 둔다 (koharu와 동일). 개수는 로그로만 알림
-#Gemini: model 은 설정에서 고른 모델 (없으면 MODEL), 429/503 이면 FALLBACK_MODELS 로. base_url 이 있으면 그 OpenAI 방식 API, local 이면 llama-server
-def translate_lines(lines, source="Japanese", target="Korean", model=None, api_key=None, base_url=None, local=False):
-    out = request_translations(lines, source, target, model, api_key, base_url, local)
-    missing = [t for t in lines if not out.get(t["id"], "").strip()]
-    leftover = [t for t in lines if source == "Japanese" and JAPANESE.search(out.get(t["id"], ""))]
-    print(f"[translate] {source}→{target} 빠진 문장 {len(missing)}, 원어 남은 문장 {len(leftover)} / {len(lines)}", flush=True)
+
+
+
+def req_and_fill_res(lines, source="Japanese", target="Korean", model=None, api_key=None, base_url=None, local=False):
+    out = req(lines, source, target, model, api_key, base_url, local)
+    missing = [t for t in lines if not out.get(t["id"],"").strip()]
     for t in missing:
         out[t["id"]] = t["word"]
     return out

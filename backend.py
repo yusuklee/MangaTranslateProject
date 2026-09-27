@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image
 import io, os, json
 from Process.detect_ocr import detect_ocr_page
-from Process.translate import translate_lines, local_prepare, local_status
+from Process.translate import req_and_fill_res, local_prepare, local_status
 from Process.inpaint import inpaint_white, inpaint_lama
 from fonts.fonts import list_korean_fonts, FONTS_DIR
 from google.genai import errors as genai_errors
@@ -33,18 +33,40 @@ async def detect(file: UploadFile, classes: str = Form("text")):
 #local 이면 이 PC 의 llama-server. base_url 이 있으면 ChatGPT·Claude·OpenAI(사용자 등록), 키는 X-Api-Key 헤더
 #둘 다 없으면 Gemini, 키는 X-Gemini-Key
 @app.post("/translate")
-def translate(body: dict, x_gemini_key: str | None = Header(default=None), x_api_key: str | None = Header(default=None)):
-    local = bool(body.get("local"))
+def translate(body: dict, api_key: str | None = Header(default=None, alias="X-Api-Key")):
+    local =body.get("local",False)
     base_url = body.get("base_url")
-    if base_url is not None and not base_url.strip():
-        raise HTTPException(400, "OpenAI: enter the Base URL in Settings")
-    try:
-        return translate_lines(body["lines"], body.get("source", "Japanese"), body.get("target", "Korean"), body.get("model") or None,
-                               x_api_key if base_url else x_gemini_key, base_url, local)
-    except (ValueError, RuntimeError) as e:   # RuntimeError: llama-server 가 안 뜸
-        raise HTTPException(400, str(e))
-    except genai_errors.APIError as e:   # 키가 틀리거나(400/403) 한도(429) 등 API 쪽 오류 → 그 코드와 메시지를 그대로
-        raise HTTPException(e.code if 400 <= (e.code or 0) < 600 else 502, f"{'API' if base_url or local else 'Gemini'}: {e.message}")
+    # return ask_openai(local_ensure(model), model, system, payload, local=True)
+    if base_url !=None and base_url.strip()=="":
+        raise HTTPException(400, "enter the Base URL in Settings")
+
+    if local:
+        try:
+            return req_and_fill_res(body["lines"], body.get("source", None), body.get("target", "English"),
+                                    body.get("model"), local=local)
+        except Exception as e:
+            c = getattr(e, "code", None)
+            raise HTTPException(c if 400 <= (c or 0) <600 else 502, str(e))
+
+    elif base_url:
+        try:
+            return req_and_fill_res(body["lines"], body.get("source", None), body.get("target", "English"),
+                                    body.get("model"), base_url=base_url, api_key=api_key)
+        except Exception as e:
+            c = getattr(e, "code", None)
+            raise HTTPException(c if 400 <= (c or 0) < 600 else 502, str(e))
+
+    else:
+        try:
+            return req_and_fill_res(body["lines"], body.get("source", None), body.get("target", "English"),
+                                    body.get("model"), base_url=base_url, api_key=api_key)
+
+        except genai_errors.APIError as e:  # 키가 틀리거나(400/403) 한도(429) 등 API 쪽 오류 -> 그 코드와 메시지를 그대로
+            raise HTTPException(e.code ,f" Gemini: {e.message}")
+
+        except Exception as e:
+            c=getattr(e,"code",None)
+            raise HTTPException(c if 400 <= (c or 0) < 600 else 502, str(e))
 
 
 #Local 번역 준비: 프런트가 TRANSLATE·PROCESS 전에 부르고, status 를 보며 "받는 중 n%" 를 띄운다
